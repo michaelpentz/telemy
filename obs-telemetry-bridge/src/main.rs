@@ -1,11 +1,10 @@
 mod app;
 mod config;
-mod security;
-mod metrics;
-mod aggregate;
-mod server;
 mod exporters;
+mod metrics;
 mod model;
+mod security;
+mod server;
 mod startup;
 mod tray;
 

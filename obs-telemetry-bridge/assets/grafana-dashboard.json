@@ -1,0 +1,195 @@
+{
+  "dashboard": {
+    "title": "Telemy - OBS Stream Monitor",
+    "description": "Real-time OBS streaming telemetry from Telemy bridge",
+    "tags": ["telemy", "obs", "streaming"],
+    "timezone": "browser",
+    "refresh": "5s",
+    "time": { "from": "now-30m", "to": "now" },
+    "panels": [
+      {
+        "title": "Stream Health",
+        "type": "gauge",
+        "gridPos": { "h": 6, "w": 4, "x": 0, "y": 0 },
+        "fieldConfig": {
+          "defaults": {
+            "min": 0, "max": 1,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "color": "red", "value": null },
+                { "color": "yellow", "value": 0.9 },
+                { "color": "green", "value": 0.95 }
+              ]
+            },
+            "unit": "percentunit"
+          }
+        },
+        "targets": [{ "expr": "telemy_health", "legendFormat": "Health" }]
+      },
+      {
+        "title": "OBS Active FPS",
+        "type": "stat",
+        "gridPos": { "h": 6, "w": 4, "x": 4, "y": 0 },
+        "fieldConfig": {
+          "defaults": {
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "color": "red", "value": null },
+                { "color": "yellow", "value": 25 },
+                { "color": "green", "value": 55 }
+              ]
+            },
+            "unit": "short"
+          }
+        },
+        "targets": [{ "expr": "telemy_obs_active_fps", "legendFormat": "FPS" }]
+      },
+      {
+        "title": "Disk Space Available",
+        "type": "stat",
+        "gridPos": { "h": 6, "w": 4, "x": 8, "y": 0 },
+        "fieldConfig": {
+          "defaults": {
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "color": "red", "value": null },
+                { "color": "yellow", "value": 10240 },
+                { "color": "green", "value": 51200 }
+              ]
+            },
+            "unit": "decmbytes"
+          }
+        },
+        "targets": [{ "expr": "telemy_obs_disk_space_mb", "legendFormat": "Disk" }]
+      },
+      {
+        "title": "CPU / Memory / GPU",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+        "fieldConfig": {
+          "defaults": { "unit": "percent", "min": 0, "max": 100 }
+        },
+        "targets": [
+          { "expr": "telemy_system_cpu_percent", "legendFormat": "CPU %" },
+          { "expr": "telemy_system_mem_percent", "legendFormat": "Memory %" },
+          { "expr": "telemy_system_gpu_percent", "legendFormat": "GPU %" }
+        ]
+      },
+      {
+        "title": "GPU Temperature",
+        "type": "timeseries",
+        "gridPos": { "h": 6, "w": 6, "x": 12, "y": 8 },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "celsius",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "color": "green", "value": null },
+                { "color": "yellow", "value": 75 },
+                { "color": "red", "value": 90 }
+              ]
+            }
+          }
+        },
+        "targets": [{ "expr": "telemy_system_gpu_temp_c", "legendFormat": "GPU Temp" }]
+      },
+      {
+        "title": "Network Throughput",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+        "fieldConfig": {
+          "defaults": { "unit": "Mbits" }
+        },
+        "targets": [
+          { "expr": "telemy_network_upload_mbps", "legendFormat": "Upload" },
+          { "expr": "telemy_network_download_mbps", "legendFormat": "Download" }
+        ]
+      },
+      {
+        "title": "Network Latency",
+        "type": "timeseries",
+        "gridPos": { "h": 6, "w": 6, "x": 18, "y": 8 },
+        "fieldConfig": {
+          "defaults": { "unit": "ms" }
+        },
+        "targets": [{ "expr": "telemy_network_latency_ms", "legendFormat": "Latency" }]
+      },
+      {
+        "title": "Output Bitrate (per stream)",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 14 },
+        "fieldConfig": {
+          "defaults": { "unit": "kbits" }
+        },
+        "targets": [{ "expr": "telemy_output_bitrate_kbps", "legendFormat": "{{output}}" }]
+      },
+      {
+        "title": "Output FPS (per stream)",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 14 },
+        "fieldConfig": {
+          "defaults": { "unit": "short" }
+        },
+        "targets": [{ "expr": "telemy_output_fps", "legendFormat": "{{output}}" }]
+      },
+      {
+        "title": "Drop Rate (per stream)",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 22 },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percentunit",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "color": "green", "value": null },
+                { "color": "yellow", "value": 0.01 },
+                { "color": "red", "value": 0.05 }
+              ]
+            }
+          }
+        },
+        "targets": [{ "expr": "telemy_output_drop_pct", "legendFormat": "{{output}}" }]
+      },
+      {
+        "title": "Encoding Lag (per stream)",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 22 },
+        "fieldConfig": {
+          "defaults": { "unit": "ms" }
+        },
+        "targets": [{ "expr": "telemy_output_encoding_lag_ms", "legendFormat": "{{output}}" }]
+      },
+      {
+        "title": "Render Missed Frames",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 30 },
+        "fieldConfig": {
+          "defaults": { "unit": "short" }
+        },
+        "targets": [
+          { "expr": "telemy_obs_render_missed_frames", "legendFormat": "Missed" },
+          { "expr": "telemy_obs_render_total_frames", "legendFormat": "Total" }
+        ]
+      },
+      {
+        "title": "Encoder Skipped Frames",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 30 },
+        "fieldConfig": {
+          "defaults": { "unit": "short" }
+        },
+        "targets": [
+          { "expr": "telemy_obs_output_skipped_frames", "legendFormat": "Skipped" },
+          { "expr": "telemy_obs_output_total_frames", "legendFormat": "Total" }
+        ]
+      }
+    ],
+    "schemaVersion": 39
+  },
+  "overwrite": true
+}

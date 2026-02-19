@@ -7,7 +7,7 @@ use std::path::Path;
 const CONFIG_FILE: &str = "config.toml";
 const ENV_PREFIX: &str = "TELEMY_";
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
 #[serde(default)]
 pub struct Config {
     pub obs: ObsConfig,
@@ -19,22 +19,6 @@ pub struct Config {
     pub tray: TrayConfig,
     pub theme: ThemeConfig,
     pub output_names: HashMap<String, String>,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            obs: ObsConfig::default(),
-            server: ServerConfig::default(),
-            vault: VaultConfig::default(),
-            grafana: GrafanaConfig::default(),
-            network: NetworkConfig::default(),
-            startup: StartupConfig::default(),
-            tray: TrayConfig::default(),
-            theme: ThemeConfig::default(),
-            output_names: HashMap::new(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -167,16 +151,10 @@ impl Default for ThemeConfig {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
 #[serde(default)]
 pub struct VaultConfig {
     pub path: Option<String>,
-}
-
-impl Default for VaultConfig {
-    fn default() -> Self {
-        Self { path: None }
-    }
 }
 
 impl Config {
@@ -280,6 +258,9 @@ impl Config {
                     "grafana.auth_value_key is required when grafana.enabled = true".into(),
                 );
             }
+            if self.grafana.push_interval_ms < 500 {
+                return Err("grafana.push_interval_ms must be >= 500".into());
+            }
         }
         if self.network.latency_target.trim().is_empty() {
             return Err("network.latency_target must be set".into());
@@ -335,6 +316,16 @@ mod tests {
 
         cfg.grafana.endpoint = Some("https://example.com".to_string());
         cfg.grafana.auth_value_key = None;
+        assert!(cfg.validate().is_err());
+    }
+
+    #[test]
+    fn validate_rejects_too_low_grafana_interval() {
+        let mut cfg = Config::default();
+        cfg.grafana.enabled = true;
+        cfg.grafana.endpoint = Some("https://example.com".to_string());
+        cfg.grafana.auth_value_key = Some("grafana_auth".to_string());
+        cfg.grafana.push_interval_ms = 100;
         assert!(cfg.validate().is_err());
     }
 }
