@@ -16,14 +16,14 @@ pub struct MetricsHub {
     sys: System,
     networks: Networks,
     last_net_at: Option<Instant>,
+    last_rx_bytes: u64,
+    last_tx_bytes: u64,
     nvml: Option<Nvml>,
     latency_target: String,
     obs_auto_detect: bool,
     obs_process_name: String,
     last_process_check: Instant,
     obs_process_running: bool,
-    last_settings_check: Instant,
-    is_test_mode: bool,
 }
 
 impl MetricsHub {
@@ -43,14 +43,14 @@ impl MetricsHub {
             sys: System::new(),
             networks: Networks::new_with_refreshed_list(),
             last_net_at: None,
+            last_rx_bytes: 0,
+            last_tx_bytes: 0,
             nvml: Nvml::init().ok(),
             latency_target,
             obs_auto_detect,
             obs_process_name,
             last_process_check: Instant::now() - Duration::from_secs(5),
             obs_process_running: true,
-            last_settings_check: Instant::now() - Duration::from_secs(10),
-            is_test_mode: false,
         }
     }
 
@@ -117,35 +117,6 @@ impl MetricsHub {
                         obs.streaming = status.active;
                         obs.total_frames = status.total_frames as u64;
                         obs.total_dropped_frames = status.skipped_frames as u64;
-                        obs.test_mode = self.is_test_mode;
-
-                        // Check test mode periodically
-                        if self.last_settings_check.elapsed() > Duration::from_secs(5) {
-                            self.last_settings_check = Instant::now();
-                            // In obws 0.11, it is usually under config()
-                            // We need to handle potential API differences. 
-                            // If stream() doesn't exist, try config().get_stream_service_settings()
-                            // But since I can't compile to check, I will try the most likely one based on standard obws usage.
-                            // Actually, let's try to find the method by checking what modules are available.
-                            // obws 0.11 usually has client.stream() for GetStreamServiceSettings
-                            // Wait, the error said `stream` not found.
-                            // Maybe it's `client.streaming()`? No, that's for status.
-                            // Let's try `client.config().get_stream_service_settings()`
-                            
-                        // Check test mode periodically
-                        /*
-                        if self.last_settings_check.elapsed() > Duration::from_secs(5) {
-                            self.last_settings_check = Instant::now();
-                            if let Ok(settings) = client.config().stream_service_settings().await {
-                                if let Some(key_val) = settings.settings.get("key") {
-                                    if let Some(key) = key_val.as_str() {
-                                        self.is_test_mode = key.contains("?bandwidthtest=true");
-                                    }
-                                }
-                            }
-                        }
-                        */
-                        }
 
                         let drop_pct = if status.total_frames > 0 {
                             status.skipped_frames as f32 / status.total_frames as f32
@@ -165,6 +136,33 @@ impl MetricsHub {
                         self.obs_client = None;
                     }
                 }
+            }
+
+            // Collect OBS general stats (encoding lag, render/output frames, disk space)
+            if let Some(client) = &self.obs_client {
+                if let Ok(stats) = client.general().stats().await {
+                    for o in outputs.iter_mut() {
+                        o.encoding_lag_ms = stats.average_frame_render_time as f32;
+                    }
+                    obs.render_missed_frames = stats.render_skipped_frames;
+                    obs.render_total_frames = stats.render_total_frames;
+                    obs.output_skipped_frames = stats.output_skipped_frames;
+                    obs.output_total_frames = stats.output_total_frames;
+                    obs.active_fps = stats.active_fps as f32;
+                    obs.available_disk_space_mb = stats.available_disk_space;
+                }
+            }
+
+            // Collect recording status
+            if let Some(client) = &self.obs_client {
+                if let Ok(rec) = client.recording().status().await {
+                    obs.recording = rec.active;
+                }
+            }
+
+            // Detect OBS studio mode
+            if let Some(client) = &self.obs_client {
+                obs.studio_mode = client.ui().studio_mode_enabled().await.unwrap_or(false);
             }
         }
 
@@ -196,18 +194,27 @@ impl MetricsHub {
 
     async fn try_connect_obs(&mut self) {
         let password = self.obs_password.as_deref();
-        
+
         // Log connection attempt details (without exposing the actual password)
         let password_status = if password.is_some() {
             "with password"
         } else {
             "without password"
         };
-        tracing::debug!("Attempting to connect to OBS at {}:{} {}", self.obs_host, self.obs_port, password_status);
-        
+        tracing::debug!(
+            "Attempting to connect to OBS at {}:{} {}",
+            self.obs_host,
+            self.obs_port,
+            password_status
+        );
+
         match ObsClient::connect(&self.obs_host, self.obs_port, password).await {
             Ok(client) => {
-                tracing::info!("Successfully connected to OBS at {}:{}", self.obs_host, self.obs_port);
+                tracing::info!(
+                    "Successfully connected to OBS at {}:{}",
+                    self.obs_host,
+                    self.obs_port
+                );
                 self.obs_client = Some(client);
             }
             Err(e) => {
@@ -221,9 +228,14 @@ impl MetricsHub {
                         self.obs_host, self.obs_port, e
                     );
                 } else {
-                    tracing::warn!("Failed to connect to OBS at {}:{}: {}", self.obs_host, self.obs_port, e);
+                    tracing::warn!(
+                        "Failed to connect to OBS at {}:{}: {}",
+                        self.obs_host,
+                        self.obs_port,
+                        e
+                    );
                 }
-                
+
                 // Add a small delay before next connection attempt to avoid hammering
                 tokio::time::sleep(Duration::from_secs(2)).await;
             }
@@ -264,12 +276,16 @@ impl MetricsHub {
         if let Some(prev) = self.last_net_at {
             let dt = now.duration_since(prev).as_secs_f32();
             if dt > 0.0 {
-                upload_mbps = (tx_bytes as f32 * 8.0) / dt / 1_000_000.0;
-                download_mbps = (rx_bytes as f32 * 8.0) / dt / 1_000_000.0;
+                let delta_tx = tx_bytes.saturating_sub(self.last_tx_bytes);
+                let delta_rx = rx_bytes.saturating_sub(self.last_rx_bytes);
+                upload_mbps = (delta_tx as f32 * 8.0) / dt / 1_000_000.0;
+                download_mbps = (delta_rx as f32 * 8.0) / dt / 1_000_000.0;
             }
         }
 
         self.last_net_at = Some(now);
+        self.last_rx_bytes = rx_bytes;
+        self.last_tx_bytes = tx_bytes;
 
         (upload_mbps, download_mbps)
     }

@@ -52,9 +52,8 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    let grafana_configured = config.grafana.enabled
-        && config.grafana.endpoint.is_some()
-        && grafana_auth_value.is_some();
+    let grafana_configured =
+        config.grafana.enabled && config.grafana.endpoint.is_some() && grafana_auth_value.is_some();
 
     let (tx, rx) = watch::channel(TelemetryFrame::default());
     let obs_host = config.obs.host.clone();
@@ -123,7 +122,7 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let addr: SocketAddr = format!("127.0.0.1:{}", config.server.port).parse()?;
-    
+
     // Get or generate server token, storing in vault for persistence
     let token = if let Some(token) = config.server.token {
         token
@@ -144,8 +143,15 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     };
-    
-    let dashboard_url = format!("http://127.0.0.1:{}/obs?token={}", config.server.port, token);
+
+    let dashboard_url = format!(
+        "http://127.0.0.1:{}/obs?token={}",
+        config.server.port, token
+    );
+    let settings_url = format!(
+        "http://127.0.0.1:{}/settings?token={}",
+        config.server.port, token
+    );
 
     println!("OBS dashboard: {}", dashboard_url);
 
@@ -155,17 +161,18 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     if config.tray.enable {
         let url = dashboard_url.clone();
+        let settings = settings_url.clone();
         let flag = shutdown_flag.clone();
         let tx = shutdown_tx.clone();
         std::thread::spawn(move || {
-            if let Err(err) = crate::tray::start_tray(url, flag, tx) {
+            if let Err(err) = crate::tray::start_tray(url, settings, flag, tx) {
                 eprintln!("tray failed: {err}");
             }
         });
     }
 
     tokio::select! {
-        res = crate::server::start(addr, token, rx, shutdown_rx_server, config.theme.clone(), vault.clone(), grafana_configured, config.output_names.clone()) => res,
+        res = crate::server::start(addr, token, rx, shutdown_rx_server, config.theme.clone(), vault.clone(), grafana_configured) => res,
         _ = tokio::signal::ctrl_c() => {
             eprintln!("shutdown: ctrl-c");
             metrics_task.abort();

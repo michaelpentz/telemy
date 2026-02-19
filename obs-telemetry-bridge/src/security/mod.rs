@@ -50,11 +50,7 @@ impl Vault {
     }
 
     pub fn retrieve(&self, key: &str) -> Result<String, Box<dyn std::error::Error>> {
-        let encoded = self
-            .store
-            .entries
-            .get(key)
-            .ok_or("missing vault key")?;
+        let encoded = self.store.entries.get(key).ok_or("missing vault key")?;
         let encrypted = general_purpose::STANDARD.decode(encoded)?;
         let decrypted = unprotect(&encrypted)?;
         Ok(String::from_utf8(decrypted)?)
@@ -80,14 +76,14 @@ fn default_vault_path() -> PathBuf {
 
 fn protect(data: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     unsafe {
-        let mut in_blob = CRYPT_INTEGER_BLOB {
+        let in_blob = CRYPT_INTEGER_BLOB {
             cbData: data.len() as u32,
             pbData: data.as_ptr() as *mut u8,
         };
         let mut out_blob = CRYPT_INTEGER_BLOB::default();
 
         CryptProtectData(
-            &mut in_blob,
+            &in_blob,
             None,
             None,
             None,
@@ -104,14 +100,14 @@ fn protect(data: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
 
 fn unprotect(data: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     unsafe {
-        let mut in_blob = CRYPT_INTEGER_BLOB {
+        let in_blob = CRYPT_INTEGER_BLOB {
             cbData: data.len() as u32,
             pbData: data.as_ptr() as *mut u8,
         };
         let mut out_blob = CRYPT_INTEGER_BLOB::default();
 
         CryptUnprotectData(
-            &mut in_blob,
+            &in_blob,
             None,
             None,
             None,
