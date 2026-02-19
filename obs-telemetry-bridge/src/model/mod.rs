@@ -15,9 +15,15 @@ pub struct ObsFrame {
     pub connected: bool,
     pub streaming: bool,
     pub recording: bool,
-    pub test_mode: bool,
+    pub studio_mode: bool,
     pub total_dropped_frames: u64,
     pub total_frames: u64,
+    pub render_missed_frames: u32,
+    pub render_total_frames: u32,
+    pub output_skipped_frames: u32,
+    pub output_total_frames: u32,
+    pub active_fps: f32,
+    pub available_disk_space_mb: f64,
 }
 
 #[derive(Debug, Clone, Default, Serialize)]

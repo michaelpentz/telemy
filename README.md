@@ -1,259 +1,127 @@
-# OBS Telemetry Bridge
+# Telemy — OBS Stream Monitor
 
-A professional-grade monitoring solution for multi-encode OBS streaming setups. This system bridges OBS Studio with remote monitoring via Grafana Cloud while providing real-time health metrics through an in-OBS Lua display.
+A real-time monitoring solution for multi-encode OBS streaming setups. Telemy bridges OBS Studio with Grafana Cloud for remote telemetry while providing a live health dashboard directly inside OBS.
 
-## 🎯 Project Vision
+## What It Does
 
-Enable streamers running complex multi-encode/multi-stream configurations to:
-- Monitor stream health in real-time within OBS
-- Access remote telemetry via Grafana Cloud for team monitoring
-- Perform pre-flight checks before going live
-- Maintain secure, encrypted credential storage
-- Scale to cloud-based monitoring and storage (future phases)
+- Monitors all OBS outputs (streams, recordings) with per-output metrics
+- Displays a real-time dashboard as an OBS Browser Source
+- Exports 18 telemetry metrics to Grafana Cloud via OpenTelemetry OTLP
+- Provides a bundled Grafana dashboard with one-click import
+- Manages credentials securely using Windows DPAPI encryption
+- Runs as a system tray application with auto-start support
 
-## 🏗️ Architecture Overview
+## Architecture
 
-The system consists of three core components:
-
-### 1. **Telemetry Engine** (Rust Executable)
-- Standalone background application
-- Collects metrics from OBS via WebSocket
-- Monitors system resources (GPU via NVML, CPU, network)
-- Performs pre-flight stream validation
-- Pushes telemetry to Grafana Cloud
-- Manages encrypted credential vault
-
-### 2. **Local Bridge** (JSON File)
-- Lightweight data exchange mechanism
-- Written by Rust engine, read by Lua script
-- Contains real-time health metrics
-- No network calls = zero OBS performance impact
-
-### 3. **OBS Display** (Lua Script)
-- Native OBS script (Scripts menu)
-- Reads local bridge file
-- Displays multi-stream health dashboard
-- No direct network access or key handling
+Telemy is a standalone Rust executable that runs alongside OBS Studio:
 
 ```
-┌─────────────────┐
-│  Rust Engine    │
-│  (Background)   │
-└────────┬────────┘
-         │
-         ├──────────────────┐
-         │                  │
-         ▼                  ▼
-  ┌─────────────┐    ┌──────────────┐
-  │ Local Bridge│    │ Grafana Cloud│
-  │  (JSON)     │    │   (OTLP)     │
-  └──────┬──────┘    └──────────────┘
-         │
-         ▼
-  ┌─────────────┐
-  │ OBS Lua     │
-  │ Dashboard   │
-  └─────────────┘
+                          OBS Studio
+                              |
+                         WebSocket v5
+                              |
+                     +--------+---------+
+                     |   Telemy Engine  |
+                     |                  |
+                     |  MetricsHub      |--- sysinfo (CPU, RAM)
+                     |  (collects       |--- NVML (GPU util, temp)
+                     |   every 500ms)   |--- TCP probe (latency)
+                     |                  |
+                     +---+---------+----+
+                         |         |
+                  watch channel    |
+                    |         |    |
+                    v         v    v
+                 Server    Exporter   Tray
+                 (Axum)    (OTLP)     Icon
+                    |         |
+                    v         v
+              OBS Browser  Grafana
+              Source        Cloud
 ```
 
-## 🔐 Security Architecture
+### Components
 
-### Credential Management
-- **Windows DPAPI Encryption**: Stream keys encrypted using Windows User Profile
-- **Zero-Key Lua**: OBS script never accesses raw credentials
-- **Blind Pre-Flight**: TCP/RTMP handshake checks without exposing keys until stream start
+1. **MetricsHub** — Collects OBS WebSocket stats (outputs, streaming/recording status, general stats, studio mode), system metrics (CPU, memory, GPU, temperature), and network metrics (throughput, latency). Uses delta-based byte tracking for accurate network rates.
 
-### Data Flow Security
-- Local bridge uses file system permissions (user-only read/write)
-- Grafana Cloud push uses API token authentication
-- No plaintext keys in memory dumps or logs
+2. **HTTP/WebSocket Server** — Axum 0.7 on port 7070. Serves the embedded dashboard, WebSocket telemetry stream, unified settings page, and Grafana dashboard import routes. Token-authenticated.
 
-## 📊 Monitored Metrics
+3. **Grafana Exporter** — Pushes telemetry to Grafana Cloud via OpenTelemetry OTLP/HTTP. 18 histogram metrics covering health, system, network, per-output streams, and OBS internal stats.
 
-### OBS Health Metrics (via WebSocket)
-- Dropped frames (network & rendering)
-- Encoding lag/overload
-- Bitrate fluctuations
-- FPS stability
-- Stream status per output
+4. **System Tray** — Windows tray icon with "Open Dashboard" and "Quit".
 
-### System Metrics
-- GPU utilization, temperature, VRAM usage (NVENC)
-- CPU usage per core
-- Network throughput and latency
-- Disk I/O (for recording)
+### Monitored Metrics
 
-### Pre-Flight Checks
-- RTMP/RTMPS port availability
-- Bandwidth test streams (platform-specific)
-  - Twitch: `?bandwidthtest=true` key append
-  - YouTube: Private test stream key
-  - Kick: TBD investigation
-  - TikTok: TBD investigation
-- Ingest server latency measurement
+**OBS Stats** (via WebSocket v5):
+- Per-output: bitrate, FPS, frame drop %, encoding lag
+- Global: streaming/recording status, studio mode, active FPS
+- Render missed frames, encoder skipped frames
+- Available disk space
 
-## 🚀 Deployment Model
+**System Metrics**:
+- CPU usage, memory usage
+- GPU utilization and temperature (NVIDIA NVML)
+- Network upload/download throughput, latency
 
-### User Workflow
-1. **Launch Rust Engine**: User starts executable before streaming
-2. **Pre-Flight Validation**: Run connection tests to all configured platforms
-3. **Start OBS**: Engine detects OBS launch, begins metric collection
-4. **Monitor**: View real-time health in OBS Lua dashboard
-5. **Remote Access**: Team views Grafana Cloud dashboard via shared link
+## Quick Start
 
-### Data Storage
-- **Local**: SQLite database (24-hour rolling history)
-- **Cloud**: Grafana Cloud (retention based on user's plan)
-- **Future**: User-provided cloud storage (AWS S3, Azure Blob, GCP Storage)
+See [obs-telemetry-bridge/README.md](obs-telemetry-bridge/README.md) for full setup instructions.
 
-## 🎛️ Configuration
-
-### Initial Setup
-```yaml
-# config.toml (encrypted by Rust engine)
-[platforms]
-  [platforms.twitch]
-    enabled = true
-    ingest_url = "rtmps://live.twitch.tv:443/app/"
-    stream_key = "<encrypted>"
-  
-  [platforms.youtube]
-    enabled = true
-    ingest_url = "rtmps://a.rtmps.youtube.com:443/live2/"
-    stream_key = "<encrypted>"
-  
-  [platforms.kick]
-    enabled = true
-    ingest_url = "rtmps://fra.stream.kick.com:443/app/"
-    stream_key = "<encrypted>"
-
-[grafana]
-  api_url = "https://prometheus-prod-01-eu-west-0.grafana.net/api/prom/push"
-  api_token = "<encrypted>"
-
-[obs]
-  websocket_port = 4455
-  websocket_password = "<encrypted>"
-
-[engine]
-  metrics_interval = 5  # seconds
-  bridge_update_rate = 500  # milliseconds
+```bash
+cd obs-telemetry-bridge
+cargo build --release
+./target/release/obs-telemetry-bridge config-init
+./target/release/obs-telemetry-bridge vault-set obs_password "YOUR_OBS_PASSWORD"
+./target/release/obs-telemetry-bridge
 ```
 
-## 📦 Installation
+Add the printed URL as an OBS Browser Source.
 
-### Prerequisites
+## Grafana Cloud Integration
+
+Telemy includes a pre-built Grafana dashboard with 13 panels. Setup options:
+
+1. **Settings Page** — Configure OTLP endpoint, instance ID, and API token from the web UI at `/settings`
+2. **Dashboard Download** — Download the bundled JSON from `/grafana-dashboard`
+3. **Auto-Import** — Push the dashboard directly to Grafana Cloud from the settings page
+
+## Security
+
+- Windows DPAPI encryption for all secrets (OBS password, Grafana tokens, server token)
+- Credentials stored as encrypted blobs in `%APPDATA%/Telemy/vault.json`
+- Dashboard access requires a randomly-generated token
+- Passwords never pre-filled in settings forms
+
+## Requirements
+
 - Windows 10/11 (64-bit)
-- OBS Studio 28.0+ with WebSocket plugin enabled
-- Grafana Cloud free account (or paid tier)
-- NVIDIA GPU with NVENC support (optional, for GPU metrics)
+- OBS Studio 28+ with WebSocket server enabled (obs-websocket v5)
+- Grafana Cloud account (optional, for remote monitoring)
+- NVIDIA GPU (optional, for GPU metrics)
 
-### Steps
-1. Download latest release from GitHub
-2. Run installer or extract portable ZIP
-3. Launch `obs-telemetry-bridge.exe`
-4. Configure stream keys and Grafana Cloud token
-5. Install OBS Lua script via OBS Scripts menu
-6. Run pre-flight checks
+## Technology Stack
 
-## 🔄 Update Mechanism
+- **Language**: Rust 2021 edition (tokio async runtime)
+- **OBS Integration**: obws 0.11 (obs-websocket v5 protocol)
+- **HTTP Server**: Axum 0.7 with WebSocket support
+- **GPU Metrics**: nvml-wrapper 0.9 (NVIDIA NVML)
+- **System Metrics**: sysinfo 0.30
+- **Cloud Export**: OpenTelemetry OTLP/HTTP (opentelemetry 0.21)
+- **Security**: Windows DPAPI via `windows` crate
+- **Configuration**: TOML via `serde` + `toml`
 
-The Rust engine checks for updates on launch:
-- Queries GitHub Releases API
-- Compares semantic versions
-- Downloads and verifies installer (SHA256)
-- Prompts user to install update
+## Development
 
-## 🌐 Grafana Cloud Integration
+```bash
+cd obs-telemetry-bridge
+cargo build            # Debug build
+cargo test             # Run tests
+cargo clippy           # Lint
+cargo build --release  # Release build
+```
 
-### Dashboard Features
-- Multi-stream health matrix (all platforms at a glance)
-- Historical performance graphs (dropped frames over time)
-- Encoding efficiency metrics (bitrate vs quality)
-- System resource correlation (GPU load vs frame drops)
-- Alert annotations (manual or automated)
+See [DEVELOPMENT.md](DEVELOPMENT.md) for architecture details.
 
-### Sharing & Collaboration
-- Generate shareable dashboard links
-- No login required for viewers (read-only access)
-- Real-time updates (5-second refresh)
+## License
 
-## 📈 Development Roadmap
-
-### Phase 1: Core MVP ✅ (Current Focus)
-- [x] Architecture planning
-- [ ] Rust engine: OBS WebSocket client
-- [ ] Rust engine: Local JSON bridge writer
-- [ ] Rust engine: System metrics collector
-- [ ] OBS Lua: Dashboard UI
-- [ ] OBS Lua: Bridge reader
-- [ ] Windows DPAPI credential vault
-- [ ] Configuration file parser
-
-### Phase 2: Pre-Flight & Validation
-- [ ] TCP/RTMP handshake checks
-- [ ] Bandwidth test stream integration
-- [ ] Multi-output discovery (auto-detect encodes)
-- [ ] Pre-launch validation suite
-
-### Phase 3: Cloud Integration
-- [ ] OpenTelemetry OTLP exporter
-- [ ] Grafana Cloud authentication
-- [ ] Metric batching and buffering
-- [ ] Connection resilience (offline queue)
-- [ ] Grafana dashboard templates
-
-### Phase 4: Polish & Optimization
-- [ ] Auto-update system
-- [ ] Installer/uninstaller
-- [ ] Shared memory bridge (performance upgrade)
-- [ ] User documentation and tutorials
-- [ ] Error recovery and diagnostics
-
-### Phase 5: Multi-Tenant Scaling (Future)
-- [ ] BYOD (Bring Your Own Device) client model
-- [ ] AWS integration (S3, CloudWatch, Elemental)
-- [ ] Azure/GCP storage adapters
-- [ ] Client ID and access token system
-- [ ] Central monitoring dashboard (multi-client)
-
-## 🛠️ Technology Stack
-
-- **Engine**: Rust 1.75+ (tokio async runtime)
-- **OBS Integration**: obs-websocket v5 protocol
-- **GPU Metrics**: NVIDIA NVML bindings
-- **Encryption**: Windows DPAPI via `winapi` crate
-- **Cloud Protocol**: OpenTelemetry OTLP/HTTP
-- **Local Storage**: SQLite via `rusqlite`
-- **Configuration**: TOML via `serde`
-- **UI**: OBS Lua 5.1 (native OBS scripting)
-
-## 🤝 Contributing
-
-This is a focused MVP build. Contributions welcome after Phase 1 completion.
-
-### Code Guidelines
-- Rust: Follow Clippy pedantic lints
-- Lua: Adhere to OBS scripting best practices
-- Security: Never log or expose credentials
-- Performance: Profile before optimizing
-
-## 📄 License
-
-TBD - To be determined after initial development
-
-## 🔗 Resources
-
-- [OBS WebSocket Protocol](https://github.com/obsproject/obs-websocket/blob/master/docs/generated/protocol.md)
-- [Grafana Cloud OTLP Guide](https://grafana.com/docs/grafana-cloud/send-data/otlp/)
-- [NVIDIA NVML Documentation](https://docs.nvidia.com/deploy/nvml-api/)
-- [Windows DPAPI Overview](https://learn.microsoft.com/en-us/windows/win32/api/dpapi/)
-
-## 💬 Support
-
-- GitHub Issues: Bug reports and feature requests
-- Discussions: Architecture questions and usage help
-
----
-
-**Status**: 🏗️ In Active Development - Phase 1 (Planning Complete)
+TBD
