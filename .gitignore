@@ -1,5 +1,6 @@
 # Rust build output
 target/
+cargo-target/
 
 # Build artifacts (Windows)
 *.exe
@@ -32,6 +33,9 @@ vault.*
 
 # Logs
 *.log
+
+# Installer output
+obs-telemetry-bridge/installer/Output/
 
 # Cache
 .cache/

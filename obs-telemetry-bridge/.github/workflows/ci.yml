@@ -17,7 +17,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Build
         run: cargo build --release
-        working-directory: telemy-v1.2/obs-telemetry-bridge
+        working-directory: telemy-v1.3/obs-telemetry-bridge
       - name: Test
         run: cargo test
-        working-directory: telemy-v1.2/obs-telemetry-bridge
+        working-directory: telemy-v1.3/obs-telemetry-bridge

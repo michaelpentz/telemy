@@ -219,9 +219,9 @@ fn handle_vault_list(config: &Config) -> Result<(), Box<dyn std::error::Error>> 
 }
 
 fn handle_config_init() -> Result<(), Box<dyn std::error::Error>> {
-    let path = "config.toml";
-    Config::write_default(path)?;
-    println!("Wrote default config to {}", path);
+    let path = Config::default_path();
+    Config::write_default(&path)?;
+    println!("Wrote default config to {}", path.display());
     Ok(())
 }
 
