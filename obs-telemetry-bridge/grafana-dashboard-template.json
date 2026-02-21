@@ -1,5 +1,5 @@
 {
-  "title": "Telemy v1.2 - OBS Telemetry",
+  "title": "Telemy v0.0.2 - OBS Telemetry",
   "description": "Starter Grafana dashboard template for Telemy OTLP metrics",
   "panels": [
     {

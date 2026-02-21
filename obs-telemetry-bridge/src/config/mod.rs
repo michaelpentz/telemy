@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::env;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 const CONFIG_FILE: &str = "config.toml";
 const ENV_PREFIX: &str = "TELEMY_";
@@ -161,9 +161,10 @@ impl Config {
     pub fn load() -> Result<Self, Box<dyn std::error::Error>> {
         // Start with default config
         let mut config = Self::default();
+        let config_path = active_config_path();
 
         // Load from file if it exists
-        if let Ok(raw) = fs::read_to_string(CONFIG_FILE) {
+        if let Ok(raw) = fs::read_to_string(&config_path) {
             if let Ok(file_config) = toml::from_str::<Config>(&raw) {
                 config = file_config;
             }
@@ -272,16 +273,48 @@ impl Config {
         if path.as_ref().exists() {
             return Err("config.toml already exists".into());
         }
+        if let Some(parent) = path.as_ref().parent() {
+            if !parent.as_os_str().is_empty() {
+                fs::create_dir_all(parent)?;
+            }
+        }
         let data = toml::to_string_pretty(&Config::default())?;
         fs::write(path, data)?;
         Ok(())
     }
 
     pub fn save(&self) -> Result<(), Box<dyn std::error::Error>> {
+        let path = active_config_path();
         self.validate()?;
         let data = toml::to_string_pretty(self)?;
-        fs::write(CONFIG_FILE, data)?;
+        if let Some(parent) = path.parent() {
+            if !parent.as_os_str().is_empty() {
+                fs::create_dir_all(parent)?;
+            }
+        }
+        fs::write(path, data)?;
         Ok(())
+    }
+
+    pub fn default_path() -> PathBuf {
+        managed_config_path()
+    }
+}
+
+fn managed_config_path() -> PathBuf {
+    if let Ok(path) = env::var(format!("{}CONFIG_PATH", ENV_PREFIX)) {
+        return PathBuf::from(path);
+    }
+    let appdata = env::var("APPDATA").unwrap_or_else(|_| ".".to_string());
+    Path::new(&appdata).join("Telemy").join(CONFIG_FILE)
+}
+
+fn active_config_path() -> PathBuf {
+    let local = PathBuf::from(CONFIG_FILE);
+    if local.exists() {
+        local
+    } else {
+        managed_config_path()
     }
 }
 

@@ -1,4 +1,4 @@
-# OBS Telemetry Bridge (v1.3)
+# OBS Telemetry Bridge (v0.0.2)
 
 Minimal Rust telemetry engine that:
 - Collects OBS + system + network metrics in real-time
