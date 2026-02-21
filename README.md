@@ -1,71 +1,46 @@
-# Telemy — OBS Stream Monitor
+# Telemy - OBS Stream Monitor
 
-A real-time monitoring solution for multi-encode OBS streaming setups. Telemy bridges OBS Studio with Grafana Cloud for remote telemetry while providing a live health dashboard directly inside OBS.
+Telemy is a real-time monitoring solution for multi-encode OBS streaming setups. It bridges OBS Studio with Grafana Cloud for remote telemetry while providing a live health dashboard directly inside OBS.
+
+## Repository Layout
+
+- `obs-telemetry-bridge/`: Rust telemetry engine and dashboard server
+- `README.md`: consolidated project, usage, development, and fix notes
 
 ## What It Does
 
-- Monitors all OBS outputs (streams, recordings) with per-output metrics
+- Monitors OBS outputs (streams, recordings) with per-output metrics
 - Displays a real-time dashboard as an OBS Browser Source
-- Exports 18 telemetry metrics to Grafana Cloud via OpenTelemetry OTLP
-- Provides a bundled Grafana dashboard with one-click import
-- Manages credentials securely using Windows DPAPI encryption
-- Runs as a system tray application with auto-start support
+- Exports telemetry to Grafana Cloud via OpenTelemetry OTLP/HTTP
+- Includes a bundled Grafana dashboard with import support
+- Stores secrets using Windows DPAPI encryption
+- Supports Windows system tray and autostart
 
 ## Architecture
 
-Telemy is a standalone Rust executable that runs alongside OBS Studio:
+OBS Studio -> WebSocket v5 -> Telemy Engine (metrics collection) ->
+- Axum server (dashboard + settings + WS)
+- OTLP exporter (Grafana Cloud)
+- Tray integration (Windows)
 
-```
-                          OBS Studio
-                              |
-                         WebSocket v5
-                              |
-                     +--------+---------+
-                     |   Telemy Engine  |
-                     |                  |
-                     |  MetricsHub      |--- sysinfo (CPU, RAM)
-                     |  (collects       |--- NVML (GPU util, temp)
-                     |   every 500ms)   |--- TCP probe (latency)
-                     |                  |
-                     +---+---------+----+
-                         |         |
-                  watch channel    |
-                    |         |    |
-                    v         v    v
-                 Server    Exporter   Tray
-                 (Axum)    (OTLP)     Icon
-                    |         |
-                    v         v
-              OBS Browser  Grafana
-              Source        Cloud
-```
+## Components
 
-### Components
+1. MetricsHub: collects OBS, system, GPU, and network metrics on an interval.
+2. HTTP/WebSocket server: serves dashboard, settings, and telemetry stream.
+3. Grafana exporter: pushes histogram metrics via OTLP/HTTP.
+4. System tray: Open Dashboard and Quit actions.
 
-1. **MetricsHub** — Collects OBS WebSocket stats (outputs, streaming/recording status, general stats, studio mode), system metrics (CPU, memory, GPU, temperature), and network metrics (throughput, latency). Uses delta-based byte tracking for accurate network rates.
+## Monitored Metrics
 
-2. **HTTP/WebSocket Server** — Axum 0.7 on port 7070. Serves the embedded dashboard, WebSocket telemetry stream, unified settings page, and Grafana dashboard import routes. Token-authenticated.
-
-3. **Grafana Exporter** — Pushes telemetry to Grafana Cloud via OpenTelemetry OTLP/HTTP. 18 histogram metrics covering health, system, network, per-output streams, and OBS internal stats.
-
-4. **System Tray** — Windows tray icon with "Open Dashboard" and "Quit".
-
-### Monitored Metrics
-
-**OBS Stats** (via WebSocket v5):
-- Per-output: bitrate, FPS, frame drop %, encoding lag
-- Global: streaming/recording status, studio mode, active FPS
-- Render missed frames, encoder skipped frames
-- Available disk space
-
-**System Metrics**:
-- CPU usage, memory usage
-- GPU utilization and temperature (NVIDIA NVML)
-- Network upload/download throughput, latency
+- OBS per-output metrics: bitrate, FPS, drop percent, encoding lag
+- OBS global metrics: streaming/recording status, studio mode, active FPS
+- OBS quality metrics: render missed frames, encoder skipped frames, disk space
+- System metrics: CPU, memory, GPU utilization/temperature (NVIDIA NVML)
+- Network metrics: upload/download throughput and latency probe
 
 ## Quick Start
 
-See [obs-telemetry-bridge/README.md](obs-telemetry-bridge/README.md) for full setup instructions.
+From the repo root:
 
 ```bash
 cd obs-telemetry-bridge
@@ -75,52 +50,113 @@ cargo build --release
 ./target/release/obs-telemetry-bridge
 ```
 
-Add the printed URL as an OBS Browser Source.
+Add the printed `http://127.0.0.1:7070/obs?token=...` URL to OBS as a Browser Source.
+
+## CLI Commands
+
+- `obs-telemetry-bridge config-init`
+- `obs-telemetry-bridge vault-set <key> <value>`
+- `obs-telemetry-bridge vault-get <key>`
+- `obs-telemetry-bridge vault-list`
+- `obs-telemetry-bridge autostart-enable`
+- `obs-telemetry-bridge autostart-disable`
+
+## Settings and Security
+
+- Settings page: `http://127.0.0.1:7070/settings?token=...`
+- Vault location: `%APPDATA%/Telemy/vault.json`
+- Vault keys:
+  - `server_token` (dashboard access)
+  - `obs_password` (OBS WebSocket password)
+  - `grafana_auth` (Grafana auth material)
+
+All secrets are encrypted with Windows DPAPI.
 
 ## Grafana Cloud Integration
 
-Telemy includes a pre-built Grafana dashboard with 13 panels. Setup options:
+- Configure endpoint, instance ID, and token via Settings page.
+- Download bundled dashboard from `GET /grafana-dashboard?token=...`
+- Auto-import dashboard via `POST /grafana-dashboard/import?token=...`
 
-1. **Settings Page** — Configure OTLP endpoint, instance ID, and API token from the web UI at `/settings`
-2. **Dashboard Download** — Download the bundled JSON from `/grafana-dashboard`
-3. **Auto-Import** — Push the dashboard directly to Grafana Cloud from the settings page
+### Exported Metrics
 
-## Security
+- `telemy.health`
+- `telemy.system.cpu_percent`
+- `telemy.system.mem_percent`
+- `telemy.system.gpu_percent`
+- `telemy.system.gpu_temp_c`
+- `telemy.network.upload_mbps`
+- `telemy.network.download_mbps`
+- `telemy.network.latency_ms`
+- `telemy.output.bitrate_kbps`
+- `telemy.output.drop_pct`
+- `telemy.output.fps`
+- `telemy.output.encoding_lag_ms`
+- `telemy.obs.render_missed_frames`
+- `telemy.obs.render_total_frames`
+- `telemy.obs.output_skipped_frames`
+- `telemy.obs.output_total_frames`
+- `telemy.obs.active_fps`
+- `telemy.obs.disk_space_mb`
 
-- Windows DPAPI encryption for all secrets (OBS password, Grafana tokens, server token)
-- Credentials stored as encrypted blobs in `%APPDATA%/Telemy/vault.json`
-- Dashboard access requires a randomly-generated token
-- Passwords never pre-filled in settings forms
+## Development Guide
+
+### Module Structure
+
+```text
+obs-telemetry-bridge/src/
+|- main.rs
+|- app/mod.rs
+|- config/mod.rs
+|- security/mod.rs
+|- model/mod.rs
+|- metrics/mod.rs
+|- server/mod.rs
+|- exporters/mod.rs
+`- tray/mod.rs
+```
+
+### Key Dependencies
+
+- Runtime/server: `tokio`, `axum`, `tower`
+- OBS integration: `obws`
+- Metrics/system: `opentelemetry`, `opentelemetry-otlp`, `sysinfo`, `nvml-wrapper`
+- Config/serialization: `serde`, `serde_json`, `toml`
+- Windows integration: `windows`, `tray-item`, `winres`
+
+### Build and Validation
+
+```bash
+cd obs-telemetry-bridge
+cargo test
+cargo clippy -- -D warnings
+cargo build --release
+```
+
+## OBS 207 Compatibility Fix
+
+Date: 2026-02-19
+
+Issue observed:
+- `DeserializeMessage(Error("invalid value: 207 ..."))`
+
+Cause:
+- Older `obws` did not recognize OBS status code `207` (`NotReady`).
+
+Resolution:
+- Upgraded `obws` from `0.11.5` to `0.14.0`.
+
+Validation completed:
+- `cargo test` passed
+- `cargo clippy -- -D warnings` passed
+- `cargo build --release` passed
 
 ## Requirements
 
 - Windows 10/11 (64-bit)
-- OBS Studio 28+ with WebSocket server enabled (obs-websocket v5)
-- Grafana Cloud account (optional, for remote monitoring)
+- OBS Studio 28+ with WebSocket v5 enabled
+- Grafana Cloud account (optional)
 - NVIDIA GPU (optional, for GPU metrics)
-
-## Technology Stack
-
-- **Language**: Rust 2021 edition (tokio async runtime)
-- **OBS Integration**: obws 0.11 (obs-websocket v5 protocol)
-- **HTTP Server**: Axum 0.7 with WebSocket support
-- **GPU Metrics**: nvml-wrapper 0.9 (NVIDIA NVML)
-- **System Metrics**: sysinfo 0.30
-- **Cloud Export**: OpenTelemetry OTLP/HTTP (opentelemetry 0.21)
-- **Security**: Windows DPAPI via `windows` crate
-- **Configuration**: TOML via `serde` + `toml`
-
-## Development
-
-```bash
-cd obs-telemetry-bridge
-cargo build            # Debug build
-cargo test             # Run tests
-cargo clippy           # Lint
-cargo build --release  # Release build
-```
-
-See [DEVELOPMENT.md](DEVELOPMENT.md) for architecture details.
 
 ## License
 
