@@ -20,7 +20,8 @@ param(
     [switch]$AllowNoUsableLog,
     [switch]$BuildDockApp,
     [string]$DockPreviewRoot = "E:\Code\telemyapp\dock-preview",
-    [switch]$ConfigureObsCef
+    [switch]$ConfigureObsCef,
+    [int]$ObsLaunchDelayMs = 300
 )
 
 $ErrorActionPreference = "Stop"
@@ -128,6 +129,7 @@ if (-not $SkipRun) {
         ObsRoot = $ObsRoot
         StopExisting = $true
         DisableShutdownCheck = $true
+        ObsLaunchDelayMs = $ObsLaunchDelayMs
     }
     if ($SelfTestActionJson) {
         $runArgs.SelfTestActionJson = $SelfTestActionJson

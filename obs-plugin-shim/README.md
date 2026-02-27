@@ -72,6 +72,7 @@ Start a local OBS + core dev session (with correct OBS working directory and bri
 If OBS still opens the crash-recovery prompt after a forced kill, dismiss it once and rerun the command.
 `-StopExisting` now attempts graceful OBS shutdown first; use `-ForceStopExisting` only when needed.
 Tune graceful wait with `-ObsGracefulTimeoutSeconds` (default `20`).
+Use `-ObsLaunchDelayMs` (default `300`) to delay OBS launch slightly after core start.
 
 Optional selftest action injection on page-ready:
 
@@ -138,6 +139,7 @@ Useful variants:
 .\dev-cycle.ps1 -BuildDockApp
 .\dev-cycle.ps1 -ConfigureObsCef -SkipBuild -SkipDeploy -SkipRun -SkipValidate
 .\dev-cycle.ps1 -SkipBuild -SkipDeploy -ValidationProfile smoke -AllowNoUsableLog
+.\dev-cycle.ps1 -ObsLaunchDelayMs 600
 ```
 
 When `-BuildDockApp` is used, dev-cycle also syncs fresh `aegis-dock-app.js` (and `aegis-dock.html` when staged) into `RepoRoot` for `AEGIS_DOCK_BRIDGE_ROOT` runs.

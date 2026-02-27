@@ -5,6 +5,7 @@ param(
     [switch]$StopExisting,
     [switch]$ForceStopExisting,
     [int]$ObsGracefulTimeoutSeconds = 20,
+    [int]$ObsLaunchDelayMs = 300,
     [switch]$DisableShutdownCheck,
     [string]$SelfTestActionJson = "",
     [switch]$SelfTestDirectPluginIntake
@@ -82,6 +83,9 @@ if ($SelfTestActionJson) {
 }
 
 $core = Start-Process -FilePath $coreExe -WorkingDirectory $coreWd -PassThru
+if ($ObsLaunchDelayMs -gt 0) {
+    Start-Sleep -Milliseconds $ObsLaunchDelayMs
+}
 $obsArgs = @()
 if ($DisableShutdownCheck) {
     $obsArgs += "--disable-shutdown-check"
