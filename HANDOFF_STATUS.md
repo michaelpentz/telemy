@@ -118,6 +118,7 @@ Use this file for a quick orientation only.
   - `obs-plugin-shim/deploy-to-obs.ps1` now keeps runtime asset selection consistent with `-BridgeRoot`: it prefers root `aegis-dock-app.js` / `aegis-dock.html` when present, then falls back to staged build assets
 - OBS plugin configure reproducibility follow-up (2026-02-27):
   - added `obs-plugin-shim/configure-obs-cef.ps1` to validate local OBS include/import-lib prerequisites and run a consistent CMake configure with OBS CEF flags and library wiring
+  - `obs-plugin-shim/dev-cycle.ps1` now supports `-ConfigureObsCef` to invoke the configure helper inline before build/deploy/run
 - Rust `/obs` debug dashboard now supports an explicit empty-scene debug switch trigger (`allow_empty=true`) to validate `missing_scene_name` without changing production IPC semantics.
 - OBS plugin build path is now locally reproducible without a full OBS source build:
   - headers from vendored `third_party/obs-studio` (matched to OBS `32.0.4`)
