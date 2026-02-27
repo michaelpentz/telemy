@@ -72,6 +72,19 @@ Validate latest OBS log for startup (and optional action lifecycle):
 .\validate-obs-log.ps1 -RequestId selftest_set_setting_manual_override_true
 ```
 
+Run an end-to-end local dev cycle (build + deploy + run + validate):
+
+```powershell
+.\dev-cycle.ps1
+```
+
+Useful variants:
+
+```powershell
+.\dev-cycle.ps1 -SkipRun -SkipValidate
+.\dev-cycle.ps1 -SkipBuild
+```
+
 ## Harness Commands (Windows)
 
 - `start` / `stop`
