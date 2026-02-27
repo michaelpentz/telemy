@@ -56,6 +56,14 @@ Notes:
 - `-BridgeRoot` forces bridge JS files to come from repo root (recommended during active dock-bridge iteration).
 - Omit `-BridgeRoot` to use build-staged bridge assets from the CMake output directory.
 
+Start a local OBS + core dev session (with correct OBS working directory and bridge root):
+
+```powershell
+.\run-dev-session.ps1 -StopExisting -DisableShutdownCheck
+```
+
+If OBS still opens the crash-recovery prompt after a forced kill, dismiss it once and rerun the command.
+
 ## Harness Commands (Windows)
 
 - `start` / `stop`
