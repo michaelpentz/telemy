@@ -5,7 +5,8 @@ param(
     [string]$ObsRoot = "C:\Program Files (x86)\obs-studio",
     [string]$BridgeRoot = "",
     [switch]$StopObs,
-    [switch]$ForceStopObs
+    [switch]$ForceStopObs,
+    [int]$ObsGracefulTimeoutSeconds = 20
 )
 
 $ErrorActionPreference = "Stop"
@@ -15,7 +16,7 @@ $bridgeRootAutoSelected = $false
 function Stop-ObsProcess {
     param(
         [switch]$Force,
-        [int]$TimeoutSeconds = 8
+        [int]$TimeoutSeconds = 20
     )
     $obs = Get-Process obs64 -ErrorAction SilentlyContinue
     if (-not $obs) {
@@ -120,7 +121,7 @@ if ($BridgeRoot) {
 
 if ($StopObs) {
     Write-Host "Stopping OBS processes before deploy..."
-    Stop-ObsProcess -Force:$ForceStopObs
+    Stop-ObsProcess -Force:$ForceStopObs -TimeoutSeconds $ObsGracefulTimeoutSeconds
     if (Get-Process obs64 -ErrorAction SilentlyContinue) {
         throw "OBS is still running after graceful stop. Re-run with -ForceStopObs if needed."
     }

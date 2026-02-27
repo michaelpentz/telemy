@@ -61,6 +61,7 @@ Notes:
 - Omit `-BridgeRoot` to use build-staged bridge assets from the CMake output directory.
 - If `-BridgeRoot` is omitted and workspace-root bridge files exist, deploy auto-selects workspace root bridge files before falling back to build-staged assets.
 - `-StopObs` now attempts graceful OBS shutdown first; use `-ForceStopObs` only if OBS does not exit.
+- Tune graceful wait with `-ObsGracefulTimeoutSeconds` (default `20`).
 
 Start a local OBS + core dev session (with correct OBS working directory and bridge root):
 
@@ -70,6 +71,7 @@ Start a local OBS + core dev session (with correct OBS working directory and bri
 
 If OBS still opens the crash-recovery prompt after a forced kill, dismiss it once and rerun the command.
 `-StopExisting` now attempts graceful OBS shutdown first; use `-ForceStopExisting` only when needed.
+Tune graceful wait with `-ObsGracefulTimeoutSeconds` (default `20`).
 
 Optional selftest action injection on page-ready:
 

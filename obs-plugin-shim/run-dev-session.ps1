@@ -4,6 +4,7 @@ param(
     [string]$ObsRoot = "C:\Program Files (x86)\obs-studio",
     [switch]$StopExisting,
     [switch]$ForceStopExisting,
+    [int]$ObsGracefulTimeoutSeconds = 20,
     [switch]$DisableShutdownCheck,
     [string]$SelfTestActionJson = "",
     [switch]$SelfTestDirectPluginIntake
@@ -14,7 +15,7 @@ $ErrorActionPreference = "Stop"
 function Stop-ObsProcess {
     param(
         [switch]$Force,
-        [int]$TimeoutSeconds = 8
+        [int]$TimeoutSeconds = 20
     )
     $obs = Get-Process obs64 -ErrorAction SilentlyContinue
     if (-not $obs) {
@@ -57,7 +58,7 @@ if (-not (Test-Path -LiteralPath $RepoRoot)) {
 
 if ($StopExisting) {
     Write-Host "Stopping existing obs64 / obs-telemetry-bridge..."
-    Stop-ObsProcess -Force:$ForceStopExisting
+    Stop-ObsProcess -Force:$ForceStopExisting -TimeoutSeconds $ObsGracefulTimeoutSeconds
     if (Get-Process obs64 -ErrorAction SilentlyContinue) {
         throw "OBS is still running after graceful stop. Re-run with -ForceStopExisting if needed."
     }
