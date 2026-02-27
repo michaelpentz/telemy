@@ -42,9 +42,12 @@ Build the OBS plugin target:
 
 ```powershell
 cd E:\Code\telemyapp\telemy-v0.0.3\obs-plugin-shim
+.\configure-obs-cef.ps1
 cmake -S . -B build-obs-cef -DAEGIS_BUILD_OBS_PLUGIN=ON -DAEGIS_ENABLE_OBS_BROWSER_DOCK_HOST=ON -DAEGIS_ENABLE_OBS_BROWSER_DOCK_HOST_OBS_CEF=ON
 cmake --build build-obs-cef --config Release --target aegis-obs-shim
 ```
+
+`configure-obs-cef.ps1` is the preferred reproducible configure path for local OBS runtime builds (it validates OBS header/import-lib paths and sets `OBS_INCLUDE_DIRS` / `OBS_LIBRARY_DIRS` / `OBS_LIBRARIES`).
 
 Deploy plugin + assets into local OBS install:
 

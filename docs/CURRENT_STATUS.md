@@ -219,6 +219,8 @@ Last updated: 2026-02-27 (US/Pacific, late, follow-up)
   - `obs-plugin-shim/dev-cycle.ps1` now supports `-BuildDockApp` to build the React dock bundle (`dock-preview`) before plugin/deploy steps
   - when `-BuildDockApp` runs, dev-cycle now syncs fresh staged `aegis-dock-app.js` / `aegis-dock.html` into `RepoRoot` for `AEGIS_DOCK_BRIDGE_ROOT` sessions
   - `obs-plugin-shim/deploy-to-obs.ps1` now applies `-BridgeRoot` consistently to runtime dock assets by preferring root `aegis-dock-app.js` / `aegis-dock.html` when present and falling back to staged outputs otherwise
+- OBS plugin configure reproducibility improvement (2026-02-27):
+  - added `obs-plugin-shim/configure-obs-cef.ps1` as a single local configure entrypoint for OBS CEF plugin builds, including path validation for OBS headers/import libs and explicit `OBS_INCLUDE_DIRS` / `OBS_LIBRARY_DIRS` / `OBS_LIBRARIES` wiring
 
 ## Known Small Follow-Up (Not Blocking Current Client/Plugin Work)
 
