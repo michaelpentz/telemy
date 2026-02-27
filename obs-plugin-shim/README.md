@@ -101,6 +101,12 @@ Run the recommended fast UI smoke cycle (configure + dock bundle + run + smoke v
 .\run-ui-smoke.ps1
 ```
 
+Run strict startup validation cycle (configure + dock bundle + run + strict validation):
+
+```powershell
+.\run-strict-cycle.ps1
+```
+
 Useful variants:
 
 ```powershell

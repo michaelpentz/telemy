@@ -122,6 +122,7 @@ Use this file for a quick orientation only.
   - dev-cycle validation retry logic now treats transient startup evidence gaps (`Missing log evidence: ...`) as retryable until timeout, reducing false-negative failures during OBS startup races
   - `dev-cycle` now supports `-ValidationProfile strict|smoke` (default `strict`) so UI smoke runs can validate plugin/IPC startup without requiring bridge/page-ready evidence
   - added `obs-plugin-shim/run-ui-smoke.ps1` wrapper for the recommended fast local cycle (`-ConfigureObsCef -BuildDockApp -SkipBuild -SkipDeploy -ValidationProfile smoke -AllowNoUsableLog`)
+  - added `obs-plugin-shim/run-strict-cycle.ps1` wrapper for strict startup evidence validation (`-ConfigureObsCef -BuildDockApp -SkipBuild -SkipDeploy -ValidationProfile strict`)
 - Rust `/obs` debug dashboard now supports an explicit empty-scene debug switch trigger (`allow_empty=true`) to validate `missing_scene_name` without changing production IPC semantics.
 - OBS plugin build path is now locally reproducible without a full OBS source build:
   - headers from vendored `third_party/obs-studio` (matched to OBS `32.0.4`)
