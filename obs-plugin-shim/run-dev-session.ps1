@@ -3,7 +3,9 @@ param(
     [string]$WorkspaceRoot = "E:\Code\telemyapp\telemy-v0.0.3",
     [string]$ObsRoot = "C:\Program Files (x86)\obs-studio",
     [switch]$StopExisting,
-    [switch]$DisableShutdownCheck
+    [switch]$DisableShutdownCheck,
+    [string]$SelfTestActionJson = "",
+    [switch]$SelfTestDirectPluginIntake
 )
 
 $ErrorActionPreference = "Stop"
@@ -31,6 +33,17 @@ if ($StopExisting) {
 }
 
 $env:AEGIS_DOCK_BRIDGE_ROOT = $RepoRoot
+if ($SelfTestActionJson) {
+    $env:AEGIS_DOCK_SELFTEST_ACTION_JSON = $SelfTestActionJson
+    if ($SelfTestDirectPluginIntake) {
+        $env:AEGIS_DOCK_SELFTEST_DIRECT_PLUGIN_INTAKE = "1"
+    } else {
+        $env:AEGIS_DOCK_SELFTEST_DIRECT_PLUGIN_INTAKE = "0"
+    }
+} else {
+    Remove-Item Env:AEGIS_DOCK_SELFTEST_ACTION_JSON -ErrorAction SilentlyContinue
+    Remove-Item Env:AEGIS_DOCK_SELFTEST_DIRECT_PLUGIN_INTAKE -ErrorAction SilentlyContinue
+}
 
 $core = Start-Process -FilePath $coreExe -WorkingDirectory $coreWd -PassThru
 $obsArgs = @()
@@ -44,5 +57,8 @@ Write-Host "Started dev session:"
 Write-Host "  Core PID: $($core.Id)"
 Write-Host "  OBS PID:  $($obs.Id)"
 Write-Host "  AEGIS_DOCK_BRIDGE_ROOT=$RepoRoot"
+if ($SelfTestActionJson) {
+    Write-Host "  AEGIS_DOCK_SELFTEST_ACTION_JSON=<set>"
+    Write-Host "  AEGIS_DOCK_SELFTEST_DIRECT_PLUGIN_INTAKE=$($SelfTestDirectPluginIntake.IsPresent)"
+}
 Write-Host ""
-

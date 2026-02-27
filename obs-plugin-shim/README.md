@@ -65,6 +65,12 @@ Start a local OBS + core dev session (with correct OBS working directory and bri
 
 If OBS still opens the crash-recovery prompt after a forced kill, dismiss it once and rerun the command.
 
+Optional selftest action injection on page-ready:
+
+```powershell
+.\run-dev-session.ps1 -StopExisting -DisableShutdownCheck -SelfTestActionJson '{"type":"request_status","requestId":"selftest_req_status"}' -SelfTestDirectPluginIntake
+```
+
 Validate latest OBS log for startup (and optional action lifecycle):
 
 ```powershell
