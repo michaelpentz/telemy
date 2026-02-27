@@ -84,6 +84,9 @@ Use this file for a quick orientation only.
   - `request_status`: accepted/queued to `g_runtime.QueueRequestStatus()` and now emits terminal native action-result `completed` when a follow-on `status_snapshot` is observed
   - `set_mode`: parsed/validated and forwarded to Rust core IPC as `set_mode_request`, now with terminal native action-result `completed` when snapshot mode matches (or `failed` on completion-timeout)
   - `set_setting`: parsed/validated and forwarded to Rust core IPC as `set_setting_request`, now with terminal native action-result `completed` when snapshot setting matches (or `failed` on completion-timeout)
+  - shim/runtime log-noise reduction applied for long-running OBS sessions:
+    - recurring shim frame logs (`status_snapshot`, `pong`) demoted from info to debug
+    - unchanged theme-poll refresh logs demoted to debug (theme-change events remain visible)
 - Additional OBS/CEF dock-host validation completed (real OBS 32.0.4):
   - packaged dock UI now populates real bridge state (mode/current scene/scenes/event log) on the CEF path
   - manual scene switch via dock `Switch` buttons is now end-to-end validated in the visible dock UI (`sendDockAction` -> title transport -> plugin intake -> OBS apply -> native action-result `queued`/`completed`)

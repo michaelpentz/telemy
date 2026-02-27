@@ -191,6 +191,7 @@ Last updated: 2026-02-24 (US/Pacific, late, follow-up)
   - `request_status` dock actions now emit terminal native action-result `completed` when the next `status_snapshot` is observed (in addition to immediate `queued`)
   - `set_mode` and `set_setting` dock actions are implemented and forwarded to Rust core IPC (`set_mode_request`, `set_setting_request`) with payload validation and explicit `queued`/`rejected` action-result paths
   - completion semantics now extended for `set_mode` / `set_setting`: plugin tracks pending action requests and emits terminal `completed` when follow-on `status_snapshot` reflects the requested state, or terminal `failed` with `completion_timeout` if not observed in time
+  - log-noise reduction follow-up: high-frequency shim logs for recurring `status_snapshot`/`pong` frames and unchanged theme-poll refreshes were demoted to debug-level to keep OBS logs focused on lifecycle/action outcomes
 - Dock runtime stabilization follow-up (2026-02-26, real OBS validation):
   - scene list/current scene population is now stable in the visible dock without manual scene interaction
   - auto-scene-switch toggle now correctly transitions `ARMED <-> MANUAL` (fixed toggle target derivation + classic bridge projection path)

@@ -338,7 +338,7 @@ void RefreshCachedObsDockThemeFromQt(const char* reason) {
         g_obs_dock_theme_signature = next_sig;
     }
     blog(
-        theme.valid ? LOG_INFO : LOG_DEBUG,
+        (theme.valid && changed) ? LOG_INFO : LOG_DEBUG,
         "[aegis-obs-shim] obs dock theme cache refresh: valid=%s changed=%s reason=%s",
         theme.valid ? "true" : "false",
         changed ? "true" : "false",
@@ -1928,7 +1928,10 @@ bool obs_module_load(void) {
     g_frontend_exit_seen = false;
 
     g_runtime.SetLogger([](const std::string& msg) {
-        blog(LOG_INFO, "[aegis-shim] %s", msg.c_str());
+        const bool noisy_frame =
+            (msg.find("received frame type=status_snapshot") != std::string::npos) ||
+            (msg.find("received frame type=pong") != std::string::npos);
+        blog(noisy_frame ? LOG_DEBUG : LOG_INFO, "[aegis-shim] %s", msg.c_str());
     });
 
     g_runtime.SetAutoAckSwitchScene(false);
