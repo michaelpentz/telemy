@@ -38,6 +38,21 @@ function Resolve-BridgeSourceFile {
     return (Join-Path $BuildAssetDir $FileName)
 }
 
+function Resolve-DockRuntimeSourceFile {
+    param(
+        [Parameter(Mandatory = $true)][string]$BridgeRootDir,
+        [Parameter(Mandatory = $true)][string]$BuildAssetDir,
+        [Parameter(Mandatory = $true)][string]$FileName
+    )
+    if ($BridgeRootDir) {
+        $candidate = Join-Path $BridgeRootDir $FileName
+        if (Test-Path -LiteralPath $candidate) {
+            return $candidate
+        }
+    }
+    return (Join-Path $BuildAssetDir $FileName)
+}
+
 $dllSource = Join-Path $BuildDir "$Config\aegis-obs-shim.dll"
 $assetSourceDir = Join-Path $BuildDir "$Config\data\obs-plugins\aegis-obs-shim"
 
@@ -85,8 +100,8 @@ Copy-IfExists -Source $dllSource -Destination $dllDest
 Copy-IfExists -Source (Resolve-BridgeSourceFile -BridgeRootDir $BridgeRoot -BuildAssetDir $assetSourceDir -FileName "aegis-dock-bridge.js") -Destination (Join-Path $assetDestDir "aegis-dock-bridge.js")
 Copy-IfExists -Source (Resolve-BridgeSourceFile -BridgeRootDir $BridgeRoot -BuildAssetDir $assetSourceDir -FileName "aegis-dock-bridge-host.js") -Destination (Join-Path $assetDestDir "aegis-dock-bridge-host.js")
 Copy-IfExists -Source (Resolve-BridgeSourceFile -BridgeRootDir $BridgeRoot -BuildAssetDir $assetSourceDir -FileName "aegis-dock-browser-host-bootstrap.js") -Destination (Join-Path $assetDestDir "aegis-dock-browser-host-bootstrap.js")
-Copy-IfExists -Source (Join-Path $assetSourceDir "aegis-dock-app.js") -Destination (Join-Path $assetDestDir "aegis-dock-app.js")
-Copy-IfExists -Source (Join-Path $assetSourceDir "aegis-dock.html") -Destination (Join-Path $assetDestDir "aegis-dock.html")
+Copy-IfExists -Source (Resolve-DockRuntimeSourceFile -BridgeRootDir $BridgeRoot -BuildAssetDir $assetSourceDir -FileName "aegis-dock-app.js") -Destination (Join-Path $assetDestDir "aegis-dock-app.js")
+Copy-IfExists -Source (Resolve-DockRuntimeSourceFile -BridgeRootDir $BridgeRoot -BuildAssetDir $assetSourceDir -FileName "aegis-dock.html") -Destination (Join-Path $assetDestDir "aegis-dock.html")
 
 # Prevent stale mixed deployments: runtime may choose .global.js if left behind in older builds.
 $staleGlobal = Join-Path $assetDestDir "aegis-dock-bridge.global.js"

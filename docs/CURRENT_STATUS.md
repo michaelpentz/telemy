@@ -215,6 +215,9 @@ Last updated: 2026-02-27 (US/Pacific, late, follow-up)
 - Temporary validation aids are now explicitly gated (2026-02-27):
   - dock selftest dispatch requires `AEGIS_DOCK_ENABLE_SELFTEST=1` and is only enabled by helper scripts when a selftest action payload is provided
   - `Tools -> Show Aegis Dock (Telemy)` fallback menu remains opt-in via `AEGIS_DOCK_ENABLE_SHOW_MENU_FALLBACK=1`
+- Dock asset packaging flow improvements (2026-02-27):
+  - `obs-plugin-shim/dev-cycle.ps1` now supports `-BuildDockApp` to build the React dock bundle (`dock-preview`) before plugin/deploy steps
+  - `obs-plugin-shim/deploy-to-obs.ps1` now applies `-BridgeRoot` consistently to runtime dock assets by preferring root `aegis-dock-app.js` / `aegis-dock.html` when present and falling back to staged outputs otherwise
 
 ## Known Small Follow-Up (Not Blocking Current Client/Plugin Work)
 

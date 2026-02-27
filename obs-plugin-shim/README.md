@@ -54,6 +54,7 @@ Deploy plugin + assets into local OBS install:
 
 Notes:
 - `-BridgeRoot` forces bridge JS files to come from repo root (recommended during active dock-bridge iteration).
+- When `-BridgeRoot` is set, deploy now also prefers `aegis-dock-app.js` and `aegis-dock.html` from that root when present, then falls back to build-staged files.
 - Omit `-BridgeRoot` to use build-staged bridge assets from the CMake output directory.
 - If `-BridgeRoot` is omitted and workspace-root bridge files exist, deploy auto-selects workspace root bridge files before falling back to build-staged assets.
 
@@ -100,6 +101,7 @@ Useful variants:
 .\dev-cycle.ps1 -SelfTestActionJson '{"type":"set_mode","mode":"studio","requestId":"selftest_set_mode_studio"}' -SelfTestDirectPluginIntake -ValidateTerminalStatus completed
 .\dev-cycle.ps1 -ValidateRetrySeconds 45
 .\dev-cycle.ps1 -SkipBuild -SkipDeploy -AllowNoUsableLog
+.\dev-cycle.ps1 -BuildDockApp
 ```
 
 ## Harness Commands (Windows)

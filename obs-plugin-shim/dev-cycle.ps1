@@ -15,7 +15,9 @@ param(
     [string]$ValidateActionType = "",
     [string]$ValidateTerminalStatus = "",
     [int]$ValidateRetrySeconds = 30,
-    [switch]$AllowNoUsableLog
+    [switch]$AllowNoUsableLog,
+    [switch]$BuildDockApp,
+    [string]$DockPreviewRoot = "E:\Code\telemyapp\dock-preview"
 )
 
 $ErrorActionPreference = "Stop"
@@ -36,7 +38,22 @@ Write-Host "  Workspace: $WorkspaceRoot"
 Write-Host "  BuildDir:  $BuildDir"
 Write-Host "  Config:    $Config"
 Write-Host "  ObsRoot:   $ObsRoot"
+if ($BuildDockApp) {
+    Write-Host "  DockBuild: $DockPreviewRoot"
+}
 Write-Host ""
+
+if ($BuildDockApp) {
+    if (-not (Test-Path -LiteralPath $DockPreviewRoot)) {
+        throw "Dock preview root not found: $DockPreviewRoot"
+    }
+    $dockPackageJson = Join-Path $DockPreviewRoot "package.json"
+    if (-not (Test-Path -LiteralPath $dockPackageJson)) {
+        throw "Dock preview package.json not found: $dockPackageJson"
+    }
+    Write-Host "[0/4] Building dock app bundle..."
+    npm run build --prefix $DockPreviewRoot
+}
 
 if (-not $SkipBuild) {
     Write-Host "[1/4] Building plugin..."

@@ -112,6 +112,9 @@ Use this file for a quick orientation only.
 - Temporary validation aid lifecycle follow-up (2026-02-27):
   - dock selftest dispatch now requires explicit opt-in gate `AEGIS_DOCK_ENABLE_SELFTEST=1` (helper scripts set this only when `-SelfTestActionJson` is passed)
   - Tools fallback menu registration remains explicit opt-in only via `AEGIS_DOCK_ENABLE_SHOW_MENU_FALLBACK=1` (single gate path)
+- Dock asset packaging flow follow-up (2026-02-27):
+  - `obs-plugin-shim/dev-cycle.ps1` now supports `-BuildDockApp` (runs `dock-preview` production build before plugin/deploy steps)
+  - `obs-plugin-shim/deploy-to-obs.ps1` now keeps runtime asset selection consistent with `-BridgeRoot`: it prefers root `aegis-dock-app.js` / `aegis-dock.html` when present, then falls back to staged build assets
 - Rust `/obs` debug dashboard now supports an explicit empty-scene debug switch trigger (`allow_empty=true`) to validate `missing_scene_name` without changing production IPC semantics.
 - OBS plugin build path is now locally reproducible without a full OBS source build:
   - headers from vendored `third_party/obs-studio` (matched to OBS `32.0.4`)
