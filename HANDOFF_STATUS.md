@@ -82,8 +82,8 @@ Use this file for a quick orientation only.
 - Native dock action handling coverage (current):
   - `switch_scene`: accepted/queued to existing OBS-thread switch pump; now also emits terminal native action-result `completed` / `failed` for dock-originated requests (in addition to `scene_switch_completed`)
   - `request_status`: accepted/queued to `g_runtime.QueueRequestStatus()` and now emits terminal native action-result `completed` when a follow-on `status_snapshot` is observed
-  - `set_mode`: parsed/validated and forwarded to Rust core IPC as `set_mode_request` (queued action-result path active)
-  - `set_setting`: parsed/validated and forwarded to Rust core IPC as `set_setting_request` (queued action-result path active)
+  - `set_mode`: parsed/validated and forwarded to Rust core IPC as `set_mode_request`, now with terminal native action-result `completed` when snapshot mode matches (or `failed` on completion-timeout)
+  - `set_setting`: parsed/validated and forwarded to Rust core IPC as `set_setting_request`, now with terminal native action-result `completed` when snapshot setting matches (or `failed` on completion-timeout)
 - Additional OBS/CEF dock-host validation completed (real OBS 32.0.4):
   - packaged dock UI now populates real bridge state (mode/current scene/scenes/event log) on the CEF path
   - manual scene switch via dock `Switch` buttons is now end-to-end validated in the visible dock UI (`sendDockAction` -> title transport -> plugin intake -> OBS apply -> native action-result `queued`/`completed`)
@@ -117,7 +117,7 @@ Use this file for a quick orientation only.
 
 1. Continue plugin/core hybrid validation on the working OBS/CEF dock-host path (real OBS + Rust IPC), keeping scaffold fallback available.
 2. Validate and document `request_status` over the dock action transport with the Rust core running, including terminal `completed` action-result on follow-on `status_snapshot`.
-3. Validate terminal completion semantics for `set_mode` / `set_setting` actions over the same browser API contract (currently queued + core IPC forward is implemented).
+3. Validate edge behavior for `set_mode` / `set_setting` completion semantics in reconnect/no-op scenarios (queued + terminal completion/timeout paths are now implemented).
 4. Decide lifecycle for temporary validation aids (`Tools -> Show Aegis Dock (Telemy)` fallback, self-test action path) and gate/remove where appropriate.
 5. Continue dock UI implementation/styling aligned to `aegis-dock.jsx` / `aegis-dock-wide.jsx`, with layout overlap/clipping fixes for narrow/vertical dock states.
 6. Stabilize runtime asset packaging strategy for dock assets (`aegis-dock.html` + bridge JS): staged module-data default vs `AEGIS_DOCK_BRIDGE_ROOT` dev override.

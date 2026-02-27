@@ -43,6 +43,22 @@ std::mutex g_pending_switch_requests_mu;
 std::vector<PendingSwitchRequest> g_pending_switch_requests;
 std::mutex g_pending_request_status_action_ids_mu;
 std::vector<std::string> g_pending_request_status_action_ids;
+struct PendingSetModeAction {
+    std::string request_id;
+    std::string mode;
+    std::chrono::steady_clock::time_point queued_at;
+};
+struct PendingSetSettingAction {
+    std::string request_id;
+    std::string key;
+    bool value = false;
+    std::chrono::steady_clock::time_point queued_at;
+};
+std::mutex g_pending_set_mode_actions_mu;
+std::vector<PendingSetModeAction> g_pending_set_mode_actions;
+std::mutex g_pending_set_setting_actions_mu;
+std::vector<PendingSetSettingAction> g_pending_set_setting_actions;
+constexpr std::chrono::milliseconds kDockActionCompletionTimeoutMs(3000);
 std::uint64_t g_local_dock_action_seq = 0;
 bool g_obs_timer_registered = false;
 bool g_frontend_event_callback_registered = false;
@@ -102,6 +118,12 @@ std::string TryExtractEnvelopeTypeFromJson(const std::string& envelope_json);
 bool EmitDockNativeJsonArgCall(const char* method_name, const std::string& payload_json);
 void CacheDockIpcEnvelopeForReplay(const std::string& envelope_json);
 void ReemitDockStatusSnapshotWithCurrentTheme(const char* reason);
+void EmitDockActionResult(const std::string& action_type,
+                          const std::string& request_id,
+                          const std::string& status,
+                          bool ok,
+                          const std::string& error,
+                          const std::string& detail);
 
 struct ObsDockThemeSlots {
     std::string bg;
@@ -874,6 +896,220 @@ std::string ConsumePendingDockRequestStatusActionId() {
     return request_id;
 }
 
+void TrackPendingDockSetModeAction(const std::string& request_id, const std::string& mode) {
+    if (request_id.empty() || mode.empty()) {
+        return;
+    }
+    std::lock_guard<std::mutex> lock(g_pending_set_mode_actions_mu);
+    g_pending_set_mode_actions.push_back(
+        PendingSetModeAction{request_id, mode, std::chrono::steady_clock::now()});
+}
+
+void TrackPendingDockSetSettingAction(
+    const std::string& request_id,
+    const std::string& key,
+    bool value) {
+    if (request_id.empty() || key.empty()) {
+        return;
+    }
+    std::lock_guard<std::mutex> lock(g_pending_set_setting_actions_mu);
+    g_pending_set_setting_actions.push_back(
+        PendingSetSettingAction{request_id, key, value, std::chrono::steady_clock::now()});
+}
+
+struct StatusSnapshotProjection {
+    bool valid = false;
+    bool has_mode = false;
+    std::string mode;
+    bool has_auto_scene_switch = false;
+    bool auto_scene_switch = false;
+    bool has_low_quality_fallback = false;
+    bool low_quality_fallback = false;
+    bool has_manual_override = false;
+    bool manual_override = false;
+    bool has_chat_bot = false;
+    bool chat_bot = false;
+    bool has_alerts = false;
+    bool alerts = false;
+};
+
+bool TryProjectStatusSnapshot(const std::string& envelope_json, StatusSnapshotProjection* out) {
+    if (!out) {
+        return false;
+    }
+    *out = StatusSnapshotProjection{};
+    const QJsonDocument doc = QJsonDocument::fromJson(QByteArray::fromStdString(envelope_json));
+    if (!doc.isObject()) {
+        return false;
+    }
+    const QJsonObject envelope = doc.object();
+    const QJsonValue type_val = envelope.value(QStringLiteral("type"));
+    if (!type_val.isString() || type_val.toString() != QStringLiteral("status_snapshot")) {
+        return false;
+    }
+    const QJsonObject payload = envelope.value(QStringLiteral("payload")).toObject();
+    if (payload.isEmpty()) {
+        return false;
+    }
+    out->valid = true;
+    const QJsonValue mode_val = payload.value(QStringLiteral("mode"));
+    if (mode_val.isString()) {
+        out->has_mode = true;
+        out->mode = mode_val.toString().toStdString();
+    }
+    const QJsonObject settings = payload.value(QStringLiteral("settings")).toObject();
+    auto read_setting_bool = [&settings](const char* key, bool* has, bool* value) {
+        if (!key || !has || !value) {
+            return;
+        }
+        const QJsonValue v = settings.value(QString::fromUtf8(key));
+        if (!v.isBool()) {
+            return;
+        }
+        *has = true;
+        *value = v.toBool();
+    };
+    read_setting_bool("auto_scene_switch", &out->has_auto_scene_switch, &out->auto_scene_switch);
+    read_setting_bool("low_quality_fallback", &out->has_low_quality_fallback, &out->low_quality_fallback);
+    read_setting_bool("manual_override", &out->has_manual_override, &out->manual_override);
+    read_setting_bool("chat_bot", &out->has_chat_bot, &out->chat_bot);
+    read_setting_bool("alerts", &out->has_alerts, &out->alerts);
+    return true;
+}
+
+bool TryGetStatusSnapshotSettingBool(
+    const StatusSnapshotProjection& snap,
+    const std::string& key,
+    bool* out_value) {
+    if (!out_value) {
+        return false;
+    }
+    if (key == "auto_scene_switch" && snap.has_auto_scene_switch) {
+        *out_value = snap.auto_scene_switch;
+        return true;
+    }
+    if (key == "low_quality_fallback" && snap.has_low_quality_fallback) {
+        *out_value = snap.low_quality_fallback;
+        return true;
+    }
+    if (key == "manual_override" && snap.has_manual_override) {
+        *out_value = snap.manual_override;
+        return true;
+    }
+    if (key == "chat_bot" && snap.has_chat_bot) {
+        *out_value = snap.chat_bot;
+        return true;
+    }
+    if (key == "alerts" && snap.has_alerts) {
+        *out_value = snap.alerts;
+        return true;
+    }
+    return false;
+}
+
+void ResolvePendingDockActionCompletionsFromStatusSnapshot(const std::string& envelope_json) {
+    StatusSnapshotProjection snap;
+    if (!TryProjectStatusSnapshot(envelope_json, &snap) || !snap.valid) {
+        return;
+    }
+
+    std::vector<std::string> completed_mode_ids;
+    std::vector<std::string> completed_setting_ids;
+    {
+        std::lock_guard<std::mutex> lock(g_pending_set_mode_actions_mu);
+        auto it = g_pending_set_mode_actions.begin();
+        while (it != g_pending_set_mode_actions.end()) {
+            if (snap.has_mode && it->mode == snap.mode) {
+                completed_mode_ids.push_back(it->request_id);
+                it = g_pending_set_mode_actions.erase(it);
+                continue;
+            }
+            ++it;
+        }
+    }
+    {
+        std::lock_guard<std::mutex> lock(g_pending_set_setting_actions_mu);
+        auto it = g_pending_set_setting_actions.begin();
+        while (it != g_pending_set_setting_actions.end()) {
+            bool current_value = false;
+            if (TryGetStatusSnapshotSettingBool(snap, it->key, &current_value) &&
+                current_value == it->value) {
+                completed_setting_ids.push_back(it->request_id);
+                it = g_pending_set_setting_actions.erase(it);
+                continue;
+            }
+            ++it;
+        }
+    }
+
+    for (const auto& request_id : completed_mode_ids) {
+        EmitDockActionResult(
+            "set_mode",
+            request_id,
+            "completed",
+            true,
+            "",
+            "status_snapshot_applied");
+    }
+    for (const auto& request_id : completed_setting_ids) {
+        EmitDockActionResult(
+            "set_setting",
+            request_id,
+            "completed",
+            true,
+            "",
+            "status_snapshot_applied");
+    }
+}
+
+void DrainExpiredPendingDockActions() {
+    const auto now = std::chrono::steady_clock::now();
+    std::vector<std::string> timed_out_set_mode_ids;
+    std::vector<std::string> timed_out_set_setting_ids;
+    {
+        std::lock_guard<std::mutex> lock(g_pending_set_mode_actions_mu);
+        auto it = g_pending_set_mode_actions.begin();
+        while (it != g_pending_set_mode_actions.end()) {
+            if (now - it->queued_at >= kDockActionCompletionTimeoutMs) {
+                timed_out_set_mode_ids.push_back(it->request_id);
+                it = g_pending_set_mode_actions.erase(it);
+                continue;
+            }
+            ++it;
+        }
+    }
+    {
+        std::lock_guard<std::mutex> lock(g_pending_set_setting_actions_mu);
+        auto it = g_pending_set_setting_actions.begin();
+        while (it != g_pending_set_setting_actions.end()) {
+            if (now - it->queued_at >= kDockActionCompletionTimeoutMs) {
+                timed_out_set_setting_ids.push_back(it->request_id);
+                it = g_pending_set_setting_actions.erase(it);
+                continue;
+            }
+            ++it;
+        }
+    }
+    for (const auto& request_id : timed_out_set_mode_ids) {
+        EmitDockActionResult(
+            "set_mode",
+            request_id,
+            "failed",
+            false,
+            "completion_timeout",
+            "status_snapshot_not_observed");
+    }
+    for (const auto& request_id : timed_out_set_setting_ids) {
+        EmitDockActionResult(
+            "set_setting",
+            request_id,
+            "failed",
+            false,
+            "completion_timeout",
+            "status_snapshot_not_observed");
+    }
+}
+
 void CacheDockIpcEnvelopeForReplay(const std::string& envelope_json) {
     if (envelope_json.empty()) {
         return;
@@ -1189,6 +1425,7 @@ void EmitDockIpcEnvelopeJson(const std::string& envelope_json) {
         }
     }
     if (envelope_type == "status_snapshot") {
+        ResolvePendingDockActionCompletionsFromStatusSnapshot(themed_envelope_json);
         const std::string request_id = ConsumePendingDockRequestStatusActionId();
         if (!request_id.empty()) {
             EmitDockActionResult(
@@ -1436,6 +1673,7 @@ void SwitchScenePumpTick(void*, float seconds) {
         g_switch_pump_accum_seconds += seconds;
         g_theme_poll_accum_seconds += seconds;
     }
+    DrainExpiredPendingDockActions();
     if (g_theme_poll_accum_seconds >= 0.5f) {
         g_theme_poll_accum_seconds = 0.0f;
         PollObsThemeChangesOnObsThread();
@@ -1608,6 +1846,7 @@ extern "C" bool aegis_obs_shim_receive_dock_action_json(const char* action_json_
             "[aegis-obs-shim] dock action queued: type=set_mode request_id=%s mode=%s detail=queued_core_ipc",
             request_id.c_str(),
             mode.c_str());
+        TrackPendingDockSetModeAction(request_id, mode);
         g_runtime.QueueSetModeRequest(mode);
         EmitDockActionResult(action_type, request_id, "queued", true, "", "queued_core_ipc");
         return true;
@@ -1652,6 +1891,7 @@ extern "C" bool aegis_obs_shim_receive_dock_action_json(const char* action_json_
             request_id.c_str(),
             key.c_str(),
             value ? "true" : "false");
+        TrackPendingDockSetSettingAction(request_id, key, value);
         g_runtime.QueueSetSettingRequest(key, value);
         EmitDockActionResult(action_type, request_id, "queued", true, "", "queued_core_ipc");
         return true;
@@ -1782,6 +2022,14 @@ void obs_module_unload(void) {
     {
         std::lock_guard<std::mutex> lock(g_pending_request_status_action_ids_mu);
         g_pending_request_status_action_ids.clear();
+    }
+    {
+        std::lock_guard<std::mutex> lock(g_pending_set_mode_actions_mu);
+        g_pending_set_mode_actions.clear();
+    }
+    {
+        std::lock_guard<std::mutex> lock(g_pending_set_setting_actions_mu);
+        g_pending_set_setting_actions.clear();
     }
     g_dock_action_selftest_attempted = false;
     SetDockSceneSnapshotEmitter({});
