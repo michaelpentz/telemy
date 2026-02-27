@@ -1,5 +1,6 @@
 param(
     [string]$ObsLogDir = "C:\Users\mpent\AppData\Roaming\obs-studio\logs",
+    [datetime]$AfterTimestamp = [datetime]::MinValue,
     [string]$RequestId = "",
     [string]$ActionType = "",
     [string]$TerminalStatus = "",
@@ -20,7 +21,13 @@ if ($TerminalStatus -and @("completed", "failed", "rejected") -notcontains $Term
 
 $logs = Get-ChildItem -LiteralPath $ObsLogDir -File |
     Sort-Object LastWriteTime -Descending
+if ($AfterTimestamp -gt [datetime]::MinValue) {
+    $logs = $logs | Where-Object { $_.LastWriteTime -ge $AfterTimestamp }
+}
 if (-not $logs) {
+    if ($AfterTimestamp -gt [datetime]::MinValue) {
+        throw "No OBS logs found in '$ObsLogDir' at/after $AfterTimestamp"
+    }
     throw "No OBS logs found in: $ObsLogDir"
 }
 $log = $null
@@ -37,6 +44,9 @@ foreach ($candidate in $logs) {
     break
 }
 if (-not $log) {
+    if ($AfterTimestamp -gt [datetime]::MinValue) {
+        throw "No usable OBS log found at/after $AfterTimestamp (latest files are crash-recovery stubs)"
+    }
     throw "No usable OBS log found (latest files are crash-recovery stubs)"
 }
 

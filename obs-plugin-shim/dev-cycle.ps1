@@ -27,6 +27,8 @@ if (-not (Test-Path -LiteralPath $shimRoot)) {
     throw "Shim root not found: $shimRoot"
 }
 
+$validateAfterTimestamp = [datetime]::MinValue
+
 Write-Host "Aegis OBS dev cycle"
 Write-Host "  Workspace: $WorkspaceRoot"
 Write-Host "  BuildDir:  $BuildDir"
@@ -46,6 +48,7 @@ if (-not $SkipDeploy) {
 
 if (-not $SkipRun) {
     Write-Host "[3/4] Starting core + OBS..."
+    $validateAfterTimestamp = Get-Date
     $runArgs = @{
         WorkspaceRoot = $WorkspaceRoot
         RepoRoot = $RepoRoot
@@ -82,10 +85,13 @@ if (-not $SkipValidate) {
     }
 
     Write-Host "[4/4] Validating latest OBS log..."
-    Start-Sleep -Seconds 5
+    Start-Sleep -Seconds 8
     $validateArgs = @{
         RequireBridgeAssets = $true
         RequirePageReady = $true
+    }
+    if ($validateAfterTimestamp -gt [datetime]::MinValue) {
+        $validateArgs.AfterTimestamp = $validateAfterTimestamp
     }
     if ($effectiveRequestId) {
         $validateArgs.RequestId = $effectiveRequestId

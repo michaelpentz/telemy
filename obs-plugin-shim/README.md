@@ -78,6 +78,7 @@ Validate latest OBS log for startup (and optional action lifecycle):
 .\validate-obs-log.ps1 -RequestId selftest_set_setting_manual_override_true
 .\validate-obs-log.ps1 -ActionType request_status -TerminalStatus completed -RequireTerminal
 .\validate-obs-log.ps1 -RequestId selftest_set_mode_studio -ActionType set_mode -TerminalStatus completed
+.\validate-obs-log.ps1 -AfterTimestamp (Get-Date).AddMinutes(-5) -RequireBridgeAssets
 ```
 
 Run an end-to-end local dev cycle (build + deploy + run + validate):
