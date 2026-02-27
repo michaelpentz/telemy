@@ -203,6 +203,9 @@ Last updated: 2026-02-24 (US/Pacific, late, follow-up)
   - `src/obs_browser_dock_host_scaffold.{h,cpp}` (compile-gated browser-dock host scaffold module)
   - `src/obs_plugin_entry.cpp` dispatch/replay path to `window.aegisDockNative.*` (log fallback when no JS sink exists)
   - `src/ipc_client.cpp` best-effort MsgPack->JSON incoming envelope forwarding + coalesced queued `request_status`
+  - local operator scripts now present for repeatable workflow:
+    - `obs-plugin-shim/deploy-to-obs.ps1` (deploy plugin + assets, optional `-BridgeRoot`, optional `-StopObs`)
+    - `obs-plugin-shim/run-dev-session.ps1` (start core + OBS with correct working directory + `AEGIS_DOCK_BRIDGE_ROOT`)
 
 ## Known Small Follow-Up (Not Blocking Current Client/Plugin Work)
 
