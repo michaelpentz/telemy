@@ -106,7 +106,7 @@ Run the recommended fast UI smoke cycle (configure + dock bundle + run + smoke v
 .\run-ui-smoke.ps1
 ```
 
-By default `run-ui-smoke.ps1` stops OBS/core at the end via graceful shutdown. Use `-LeaveRunning` to keep them running for manual checks.
+By default `run-ui-smoke.ps1` leaves OBS/core running for manual checks. Add `-StopWhenDone` only if you explicitly want automatic shutdown.
 
 Run strict startup validation cycle (configure + dock bundle + run + strict validation):
 
@@ -114,7 +114,7 @@ Run strict startup validation cycle (configure + dock bundle + run + strict vali
 .\run-strict-cycle.ps1
 ```
 
-By default `run-strict-cycle.ps1` also stops OBS/core at the end; use `-LeaveRunning` if you want to keep the session alive.
+By default `run-strict-cycle.ps1` also leaves OBS/core running. Add `-StopWhenDone` for automatic shutdown.
 
 Stop an active local session explicitly:
 

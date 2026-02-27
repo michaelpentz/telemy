@@ -3,7 +3,7 @@ param(
     [string]$RepoRoot = "E:\Code\telemyapp",
     [string]$ObsRoot = "C:\Program Files (x86)\obs-studio",
     [int]$ValidateRetrySeconds = 12,
-    [switch]$LeaveRunning
+    [switch]$StopWhenDone
 )
 
 $ErrorActionPreference = "Stop"
@@ -34,7 +34,7 @@ try {
     $scriptFailed = $true
     throw
 } finally {
-    if (-not $LeaveRunning) {
+    if ($StopWhenDone) {
         try {
             & $stopScript -ForceIfNeeded
         } catch {
