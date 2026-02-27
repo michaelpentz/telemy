@@ -42,6 +42,22 @@ if ($AllowNoUsableLog -and (-not $PSBoundParameters.ContainsKey("ValidationProfi
     Write-Warning "Validation profile auto-set to 'smoke' because -AllowNoUsableLog was provided."
 }
 
+$stepPlan = @()
+if ($BuildDockApp) { $stepPlan += "Build dock app bundle" }
+if ($ConfigureObsCef) { $stepPlan += "Configure OBS CEF plugin build" }
+if (-not $SkipBuild) { $stepPlan += "Build plugin" }
+if (-not $SkipDeploy) { $stepPlan += "Deploy plugin/assets" }
+if (-not $SkipRun) { $stepPlan += "Start core + OBS" }
+if (-not $SkipValidate) { $stepPlan += "Validate latest OBS log" }
+
+$stepIndex = 0
+$stepTotal = $stepPlan.Count
+function Write-StepLabel {
+    param([string]$Label)
+    $script:stepIndex += 1
+    Write-Host ("[{0}/{1}] {2}..." -f $script:stepIndex, $script:stepTotal, $Label)
+}
+
 Write-Host "Aegis OBS dev cycle"
 Write-Host "  Workspace: $WorkspaceRoot"
 Write-Host "  BuildDir:  $BuildDir"
@@ -65,7 +81,7 @@ if ($BuildDockApp) {
     if (-not (Test-Path -LiteralPath $dockPackageJson)) {
         throw "Dock preview package.json not found: $dockPackageJson"
     }
-    Write-Host "[0/4] Building dock app bundle..."
+    Write-StepLabel "Building dock app bundle"
     npm run build --prefix $DockPreviewRoot
 
     $stageDockDir = Join-Path $BuildDir "$Config\data\obs-plugins\aegis-obs-shim"
@@ -86,22 +102,22 @@ if ($ConfigureObsCef) {
     if (-not (Test-Path -LiteralPath $configureScript)) {
         throw "Configure helper not found: $configureScript"
     }
-    Write-Host "[0/4] Configuring OBS CEF plugin build..."
+    Write-StepLabel "Configuring OBS CEF plugin build"
     & $configureScript -WorkspaceRoot $WorkspaceRoot -BuildDir $BuildDir
 }
 
 if (-not $SkipBuild) {
-    Write-Host "[1/4] Building plugin..."
+    Write-StepLabel "Building plugin"
     cmake --build $BuildDir --config $Config --target aegis-obs-shim
 }
 
 if (-not $SkipDeploy) {
-    Write-Host "[2/4] Deploying plugin/assets..."
+    Write-StepLabel "Deploying plugin/assets"
     & $deployScript -BuildDir $BuildDir -Config $Config -ObsRoot $ObsRoot -BridgeRoot $RepoRoot -StopObs
 }
 
 if (-not $SkipRun) {
-    Write-Host "[3/4] Starting core + OBS..."
+    Write-StepLabel "Starting core + OBS"
     $validateAfterTimestamp = Get-Date
     $runArgs = @{
         WorkspaceRoot = $WorkspaceRoot
@@ -138,7 +154,7 @@ if (-not $SkipValidate) {
         }
     }
 
-    Write-Host "[4/4] Validating latest OBS log..."
+    Write-StepLabel "Validating latest OBS log"
     Start-Sleep -Seconds 8
     $validateArgs = @{}
     if ($ValidationProfile -eq "strict") {
