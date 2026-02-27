@@ -120,6 +120,9 @@ Stop an active local session explicitly:
 ```
 
 `stop-dev-session.ps1` attempts graceful OBS shutdown first. Use `-ForceIfNeeded` to auto-escalate only when graceful timeout is exceeded.
+Useful options:
+- `-ObsGracefulTimeoutSeconds <n>` to wait longer before OBS force escalation.
+- `-CoreGracefulTimeoutSeconds <n>` to wait longer for `obs-telemetry-bridge` exit.
 
 Useful variants:
 

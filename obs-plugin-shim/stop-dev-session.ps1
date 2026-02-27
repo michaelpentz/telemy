@@ -2,7 +2,8 @@ param(
     [switch]$ForceStopObs,
     [switch]$ForceStopCore,
     [switch]$ForceIfNeeded,
-    [int]$ObsGracefulTimeoutSeconds = 20
+    [int]$ObsGracefulTimeoutSeconds = 20,
+    [int]$CoreGracefulTimeoutSeconds = 4
 )
 
 $ErrorActionPreference = "Stop"
@@ -48,18 +49,31 @@ if ((Get-Process obs64 -ErrorAction SilentlyContinue) -and (-not $ForceStopObs))
     }
 }
 
-$core = Get-Process obs-telemetry-bridge -ErrorAction SilentlyContinue
-if ($core) {
-    if ($ForceStopCore) {
+function Stop-CoreProcess {
+    param(
+        [switch]$Force,
+        [int]$TimeoutSeconds = 4
+    )
+    $core = Get-Process obs-telemetry-bridge -ErrorAction SilentlyContinue
+    if (-not $core) {
+        return
+    }
+    if ($Force) {
         $core | Stop-Process -Force -ErrorAction SilentlyContinue
-    } else {
-        $core | Stop-Process -ErrorAction SilentlyContinue
+        return
+    }
+    $core | Stop-Process -ErrorAction SilentlyContinue
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while ((Get-Process obs-telemetry-bridge -ErrorAction SilentlyContinue) -and ((Get-Date) -lt $deadline)) {
+        Start-Sleep -Milliseconds 250
     }
 }
+
+Stop-CoreProcess -Force:$ForceStopCore -TimeoutSeconds $CoreGracefulTimeoutSeconds
 if ((Get-Process obs-telemetry-bridge -ErrorAction SilentlyContinue) -and (-not $ForceStopCore)) {
     if ($ForceIfNeeded) {
         Write-Warning "obs-telemetry-bridge did not exit; forcing stop."
-        Get-Process obs-telemetry-bridge -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+        Stop-CoreProcess -Force
     } else {
         throw "obs-telemetry-bridge is still running. Re-run with -ForceStopCore or -ForceIfNeeded."
     }
