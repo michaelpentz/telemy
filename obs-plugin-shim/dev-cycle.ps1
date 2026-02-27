@@ -93,10 +93,25 @@ if ($BuildDockApp) {
     $stageHtml = Join-Path $stageDockDir "aegis-dock.html"
     $repoApp = Join-Path $RepoRoot "aegis-dock-app.js"
     $repoHtml = Join-Path $RepoRoot "aegis-dock.html"
+    $workspaceBridgeJs = Join-Path $WorkspaceRoot "aegis-dock-bridge.js"
+    $workspaceBridgeHostJs = Join-Path $WorkspaceRoot "aegis-dock-bridge-host.js"
+    $workspaceBridgeBootstrapJs = Join-Path $WorkspaceRoot "aegis-dock-browser-host-bootstrap.js"
+    $repoBridgeJs = Join-Path $RepoRoot "aegis-dock-bridge.js"
+    $repoBridgeHostJs = Join-Path $RepoRoot "aegis-dock-bridge-host.js"
+    $repoBridgeBootstrapJs = Join-Path $RepoRoot "aegis-dock-browser-host-bootstrap.js"
     if ((Test-Path -LiteralPath $RepoRoot) -and (Test-Path -LiteralPath $stageApp)) {
         Copy-Item -LiteralPath $stageApp -Destination $repoApp -Force
         if (Test-Path -LiteralPath $stageHtml) {
             Copy-Item -LiteralPath $stageHtml -Destination $repoHtml -Force
+        }
+        if (Test-Path -LiteralPath $workspaceBridgeJs) {
+            Copy-Item -LiteralPath $workspaceBridgeJs -Destination $repoBridgeJs -Force
+        }
+        if (Test-Path -LiteralPath $workspaceBridgeHostJs) {
+            Copy-Item -LiteralPath $workspaceBridgeHostJs -Destination $repoBridgeHostJs -Force
+        }
+        if (Test-Path -LiteralPath $workspaceBridgeBootstrapJs) {
+            Copy-Item -LiteralPath $workspaceBridgeBootstrapJs -Destination $repoBridgeBootstrapJs -Force
         }
         Write-Host "      Synced dock runtime assets to repo root for AEGIS_DOCK_BRIDGE_ROOT."
     }
