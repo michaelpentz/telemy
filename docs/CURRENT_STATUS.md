@@ -209,8 +209,9 @@ Last updated: 2026-02-27 (US/Pacific, late, follow-up)
     - `obs-plugin-shim/dev-cycle.ps1` (one-command local build + deploy + optional run + optional log validation)
 - Validation automation follow-up (2026-02-27):
   - `obs-plugin-shim/validate-obs-log.ps1` now supports filtered dock-action lifecycle checks by `-ActionType` and optional `-TerminalStatus` (`completed|failed|rejected`), in addition to `-RequestId`
+  - validator also supports `-AfterTimestamp` so dev-cycle checks can be scoped to current-session logs only
   - `obs-plugin-shim/dev-cycle.ps1` now forwards optional self-test action payloads to `run-dev-session.ps1` and can auto-derive validate filters from the self-test JSON
-  - fixed dev-cycle script arg binding for run/validate calls using hashtable splatting (eliminates prior switch/positional binding bug)
+  - fixed dev-cycle script arg binding for run/validate calls using hashtable splatting and now passes session start time into validation to avoid stale-log matches
 
 ## Known Small Follow-Up (Not Blocking Current Client/Plugin Work)
 
