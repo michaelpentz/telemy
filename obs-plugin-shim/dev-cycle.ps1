@@ -8,7 +8,12 @@ param(
     [switch]$SkipBuild,
     [switch]$SkipDeploy,
     [switch]$SkipRun,
-    [switch]$SkipValidate
+    [switch]$SkipValidate,
+    [string]$SelfTestActionJson = "",
+    [switch]$SelfTestDirectPluginIntake,
+    [string]$ValidateRequestId = "",
+    [string]$ValidateActionType = "",
+    [string]$ValidateTerminalStatus = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -41,15 +46,58 @@ if (-not $SkipDeploy) {
 
 if (-not $SkipRun) {
     Write-Host "[3/4] Starting core + OBS..."
-    & $runScript -WorkspaceRoot $WorkspaceRoot -RepoRoot $RepoRoot -ObsRoot $ObsRoot -StopExisting -DisableShutdownCheck
+    $runArgs = @{
+        WorkspaceRoot = $WorkspaceRoot
+        RepoRoot = $RepoRoot
+        ObsRoot = $ObsRoot
+        StopExisting = $true
+        DisableShutdownCheck = $true
+    }
+    if ($SelfTestActionJson) {
+        $runArgs.SelfTestActionJson = $SelfTestActionJson
+        if ($SelfTestDirectPluginIntake) {
+            $runArgs.SelfTestDirectPluginIntake = $true
+        }
+    }
+    & $runScript @runArgs
 }
 
 if (-not $SkipValidate) {
+    $effectiveRequestId = $ValidateRequestId
+    $effectiveActionType = $ValidateActionType
+    if ((-not $effectiveRequestId) -and (-not $effectiveActionType) -and $SelfTestActionJson) {
+        try {
+            $parsedAction = $SelfTestActionJson | ConvertFrom-Json
+            if ($parsedAction.requestId) {
+                $effectiveRequestId = [string]$parsedAction.requestId
+            } elseif ($parsedAction.request_id) {
+                $effectiveRequestId = [string]$parsedAction.request_id
+            }
+            if ($parsedAction.type) {
+                $effectiveActionType = [string]$parsedAction.type
+            }
+        } catch {
+            Write-Warning "Could not parse -SelfTestActionJson for validate auto-derivation: $($_.Exception.Message)"
+        }
+    }
+
     Write-Host "[4/4] Validating latest OBS log..."
     Start-Sleep -Seconds 5
-    & $validateScript -RequireBridgeAssets -RequirePageReady
+    $validateArgs = @{
+        RequireBridgeAssets = $true
+        RequirePageReady = $true
+    }
+    if ($effectiveRequestId) {
+        $validateArgs.RequestId = $effectiveRequestId
+    }
+    if ($effectiveActionType) {
+        $validateArgs.ActionType = $effectiveActionType
+    }
+    if ($ValidateTerminalStatus) {
+        $validateArgs.TerminalStatus = $ValidateTerminalStatus
+    }
+    & $validateScript @validateArgs
 }
 
 Write-Host ""
 Write-Host "Dev cycle complete."
-

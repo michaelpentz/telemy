@@ -76,6 +76,8 @@ Validate latest OBS log for startup (and optional action lifecycle):
 ```powershell
 .\validate-obs-log.ps1 -RequireBridgeAssets -RequirePageReady
 .\validate-obs-log.ps1 -RequestId selftest_set_setting_manual_override_true
+.\validate-obs-log.ps1 -ActionType request_status -TerminalStatus completed -RequireTerminal
+.\validate-obs-log.ps1 -RequestId selftest_set_mode_studio -ActionType set_mode -TerminalStatus completed
 ```
 
 Run an end-to-end local dev cycle (build + deploy + run + validate):
@@ -89,6 +91,8 @@ Useful variants:
 ```powershell
 .\dev-cycle.ps1 -SkipRun -SkipValidate
 .\dev-cycle.ps1 -SkipBuild
+.\dev-cycle.ps1 -SelfTestActionJson '{"type":"request_status","requestId":"selftest_req_status"}' -SelfTestDirectPluginIntake -ValidateTerminalStatus completed
+.\dev-cycle.ps1 -SelfTestActionJson '{"type":"set_mode","mode":"studio","requestId":"selftest_set_mode_studio"}' -SelfTestDirectPluginIntake -ValidateTerminalStatus completed
 ```
 
 ## Harness Commands (Windows)

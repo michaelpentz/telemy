@@ -1,6 +1,10 @@
 param(
     [string]$ObsLogDir = "C:\Users\mpent\AppData\Roaming\obs-studio\logs",
     [string]$RequestId = "",
+    [string]$ActionType = "",
+    [string]$TerminalStatus = "",
+    [switch]$RequireQueued,
+    [switch]$RequireTerminal,
     [switch]$RequirePageReady,
     [switch]$RequireBridgeAssets
 )
@@ -9,6 +13,9 @@ $ErrorActionPreference = "Stop"
 
 if (-not (Test-Path -LiteralPath $ObsLogDir)) {
     throw "OBS log dir not found: $ObsLogDir"
+}
+if ($TerminalStatus -and @("completed", "failed", "rejected") -notcontains $TerminalStatus) {
+    throw "Invalid -TerminalStatus '$TerminalStatus'. Expected one of: completed, failed, rejected."
 }
 
 $logs = Get-ChildItem -LiteralPath $ObsLogDir -File |
@@ -57,12 +64,36 @@ if ($RequirePageReady) {
     $null = Assert-LogContains -Pattern "CEF page ready" -Label "CEF page ready"
 }
 
-if ($RequestId) {
-    $queued = Assert-LogContains -Pattern ("dock action result: action_type=.*request_id=" + [regex]::Escape($RequestId) + " status=queued") -Label "queued action result"
-    $terminal = Assert-LogContains -Pattern ("dock action result: action_type=.*request_id=" + [regex]::Escape($RequestId) + " status=(completed|failed|rejected)") -Label "terminal action result"
-    Write-Host ("  RequestId: " + $RequestId)
-    Write-Host ("  Queued:    " + $queued[-1].Line)
-    Write-Host ("  Terminal:  " + $terminal[-1].Line)
+if ($RequestId -or $ActionType -or $TerminalStatus -or $RequireQueued -or $RequireTerminal) {
+    $basePattern = "dock action result: action_type=.*"
+    if ($ActionType) {
+        $basePattern = "dock action result: action_type=" + [regex]::Escape($ActionType) + "\b.*"
+    }
+    if ($RequestId) {
+        $basePattern += "request_id=" + [regex]::Escape($RequestId) + ".*"
+    }
+
+    $terminalStatePattern = if ($TerminalStatus) { [regex]::Escape($TerminalStatus) } else { "(completed|failed|rejected)" }
+    $queuedPattern = $basePattern + "status=queued"
+    $terminalPattern = $basePattern + "status=" + $terminalStatePattern
+
+    $requireQueuedMatch = $RequireQueued.IsPresent -or $RequestId
+    $requireTerminalMatch = $RequireTerminal.IsPresent -or $RequestId -or [bool]$TerminalStatus
+
+    if ($requireQueuedMatch) {
+        $queued = Assert-LogContains -Pattern $queuedPattern -Label "queued action result"
+        Write-Host ("  Queued:    " + $queued[-1].Line)
+    }
+    if ($requireTerminalMatch) {
+        $terminal = Assert-LogContains -Pattern $terminalPattern -Label "terminal action result"
+        Write-Host ("  Terminal:  " + $terminal[-1].Line)
+    }
+    if ($RequestId) {
+        Write-Host ("  RequestId: " + $RequestId)
+    }
+    if ($ActionType) {
+        Write-Host ("  Action:    " + $ActionType)
+    }
 }
 
 Write-Host "Validation OK."
