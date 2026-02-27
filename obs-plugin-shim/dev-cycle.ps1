@@ -158,15 +158,16 @@ if (-not $SkipValidate) {
             break
         } catch {
             $msg = $_.Exception.Message
-            $retryable = $msg -like "*No usable OBS log found at/after*"
+            $retryable = ($msg -like "*No usable OBS log found at/after*") -or
+                         ($msg -like "*Missing log evidence:*")
             if ($retryable -and (Get-Date) -ge $retryUntil -and $AllowNoUsableLog) {
-                Write-Warning "Validation skipped after retry timeout: no usable OBS log for current session."
+                Write-Warning "Validation skipped after retry timeout: startup evidence not fully available in current-session logs."
                 break
             }
             if (-not $retryable -or (Get-Date) -ge $retryUntil) {
                 throw
             }
-            Write-Warning "Validation attempt $attempt had no usable current-session log yet; retrying..."
+            Write-Warning "Validation attempt $attempt missing startup evidence; retrying..."
             Start-Sleep -Seconds 4
         }
     }
