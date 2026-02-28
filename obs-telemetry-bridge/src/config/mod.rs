@@ -14,6 +14,7 @@ pub struct Config {
     pub server: ServerConfig,
     pub vault: VaultConfig,
     pub grafana: GrafanaConfig,
+    pub aegis: AegisConfig,
     pub network: NetworkConfig,
     pub startup: StartupConfig,
     pub tray: TrayConfig,
@@ -77,6 +78,24 @@ impl Default for GrafanaConfig {
             auth_header: "Authorization".to_string(),
             auth_value_key: None,
             push_interval_ms: 5000,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(default)]
+pub struct AegisConfig {
+    pub enabled: bool,
+    pub base_url: Option<String>,
+    pub access_jwt_key: Option<String>,
+}
+
+impl Default for AegisConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            base_url: None,
+            access_jwt_key: None,
         }
     }
 }
@@ -225,6 +244,17 @@ impl Config {
             }
         }
 
+        // Aegis control-plane settings
+        if let Ok(val) = env::var(format!("{}AEGIS_ENABLED", ENV_PREFIX)) {
+            self.aegis.enabled = val.parse().unwrap_or(false);
+        }
+        if let Ok(val) = env::var(format!("{}AEGIS_BASE_URL", ENV_PREFIX)) {
+            self.aegis.base_url = Some(val);
+        }
+        if let Ok(val) = env::var(format!("{}AEGIS_ACCESS_JWT_KEY", ENV_PREFIX)) {
+            self.aegis.access_jwt_key = Some(val);
+        }
+
         // Network settings
         if let Ok(val) = env::var(format!("{}LATENCY_TARGET", ENV_PREFIX)) {
             self.network.latency_target = val;
@@ -261,6 +291,14 @@ impl Config {
             }
             if self.grafana.push_interval_ms < 500 {
                 return Err("grafana.push_interval_ms must be >= 500".into());
+            }
+        }
+        if self.aegis.enabled {
+            if self.aegis.base_url.as_deref().unwrap_or("").trim().is_empty() {
+                return Err("aegis.base_url is required when aegis.enabled = true".into());
+            }
+            if self.aegis.access_jwt_key.as_deref().unwrap_or("").trim().is_empty() {
+                return Err("aegis.access_jwt_key is required when aegis.enabled = true".into());
             }
         }
         if self.network.latency_target.trim().is_empty() {
@@ -361,4 +399,19 @@ mod tests {
         cfg.grafana.push_interval_ms = 100;
         assert!(cfg.validate().is_err());
     }
+
+    #[test]
+    fn validate_requires_aegis_fields_when_enabled() {
+        let mut cfg = Config::default();
+        cfg.aegis.enabled = true;
+        assert!(cfg.validate().is_err());
+
+        cfg.aegis.base_url = Some("https://api.example.test".to_string());
+        assert!(cfg.validate().is_err());
+
+        cfg.aegis.access_jwt_key = Some("aegis_cp_access_jwt".to_string());
+        assert!(cfg.validate().is_ok());
+    }
 }
+
+

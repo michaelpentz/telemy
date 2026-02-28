@@ -1,9 +1,13 @@
+#[cfg(windows)]
 use std::os::windows::ffi::OsStrExt;
+#[cfg(windows)]
 use windows::core::PCWSTR;
+#[cfg(windows)]
 use windows::Win32::System::Registry::{
     RegDeleteValueW, RegOpenKeyExW, RegSetValueExW, HKEY_CURRENT_USER, KEY_SET_VALUE, REG_SZ,
 };
 
+#[cfg(windows)]
 pub fn set_autostart(app_name: &str, enable: bool) -> Result<(), Box<dyn std::error::Error>> {
     let exe = std::env::current_exe()?;
     let exe = exe.to_string_lossy().to_string();
@@ -38,6 +42,12 @@ pub fn set_autostart(app_name: &str, enable: bool) -> Result<(), Box<dyn std::er
     Ok(())
 }
 
+#[cfg(not(windows))]
+pub fn set_autostart(_app_name: &str, _enable: bool) -> Result<(), Box<dyn std::error::Error>> {
+    Err("autostart is only supported on Windows".into())
+}
+
+#[cfg(windows)]
 fn to_wide(s: &str) -> Vec<u16> {
     std::ffi::OsStr::new(s)
         .encode_wide()
@@ -47,8 +57,10 @@ fn to_wide(s: &str) -> Vec<u16> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(windows)]
     use super::to_wide;
 
+    #[cfg(windows)]
     #[test]
     fn to_wide_is_null_terminated() {
         let v = to_wide("Telemy");
@@ -56,6 +68,7 @@ mod tests {
         assert_eq!(*v.last().unwrap(), 0);
     }
 
+    #[cfg(windows)]
     #[test]
     fn to_wide_includes_content() {
         let v = to_wide("A");

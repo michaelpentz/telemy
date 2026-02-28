@@ -1,0 +1,4 @@
+aws iam put-user-policy \
+    --user-name telemy-cli \
+    --policy-name AegisRelaySecurityGroupManagement \
+    --policy-document file://aegis-relay-sg-policy.json

@@ -1,0 +1,164 @@
+param(
+    [string]$BuildDir = "E:\Code\telemyapp\telemy-v0.0.3\obs-plugin-shim\build-obs-cef",
+    [ValidateSet("Debug", "Release", "RelWithDebInfo", "MinSizeRel")]
+    [string]$Config = "Release",
+    [string]$ObsRoot = "C:\Program Files (x86)\obs-studio",
+    [string]$BridgeRoot = "",
+    [switch]$StopObs,
+    [switch]$ForceStopObs,
+    [int]$ObsGracefulTimeoutSeconds = 20
+)
+
+$ErrorActionPreference = "Stop"
+$workspaceRoot = Split-Path $PSScriptRoot -Parent
+$bridgeRootAutoSelected = $false
+
+function Stop-ObsProcess {
+    param(
+        [switch]$Force,
+        [int]$TimeoutSeconds = 20
+    )
+    $obs = Get-Process obs64 -ErrorAction SilentlyContinue
+    if (-not $obs) {
+        return
+    }
+
+    if ($Force) {
+        $obs | Stop-Process -Force -ErrorAction SilentlyContinue
+        return
+    }
+
+    foreach ($p in $obs) {
+        try {
+            [void]$p.CloseMainWindow()
+        } catch {
+            # ignore and evaluate below
+        }
+    }
+    Start-Sleep -Milliseconds 300
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while ((Get-Process obs64 -ErrorAction SilentlyContinue) -and ((Get-Date) -lt $deadline)) {
+        Start-Sleep -Milliseconds 300
+    }
+}
+
+function Copy-IfExists {
+    param(
+        [Parameter(Mandatory = $true)][string]$Source,
+        [Parameter(Mandatory = $true)][string]$Destination
+    )
+    if (-not (Test-Path -LiteralPath $Source)) {
+        throw "Missing required source file: $Source"
+    }
+    Copy-Item -LiteralPath $Source -Destination $Destination -Force
+}
+
+function Resolve-BridgeSourceFile {
+    param(
+        [Parameter(Mandatory = $true)][string]$BridgeRootDir,
+        [Parameter(Mandatory = $true)][string]$BuildAssetDir,
+        [Parameter(Mandatory = $true)][string]$FileName
+    )
+    if ($BridgeRootDir) {
+        $candidate = Join-Path $BridgeRootDir $FileName
+        if (Test-Path -LiteralPath $candidate) {
+            return $candidate
+        }
+        throw "BridgeRoot override set, but file is missing: $candidate"
+    }
+    return (Join-Path $BuildAssetDir $FileName)
+}
+
+function Resolve-DockRuntimeSourceFile {
+    param(
+        [Parameter(Mandatory = $true)][string]$BridgeRootDir,
+        [Parameter(Mandatory = $true)][string]$BuildAssetDir,
+        [Parameter(Mandatory = $true)][string]$FileName
+    )
+    if ($BridgeRootDir) {
+        $candidate = Join-Path $BridgeRootDir $FileName
+        if (Test-Path -LiteralPath $candidate) {
+            return $candidate
+        }
+    }
+    return (Join-Path $BuildAssetDir $FileName)
+}
+
+$dllSource = Join-Path $BuildDir "$Config\aegis-obs-shim.dll"
+$assetSourceDir = Join-Path $BuildDir "$Config\data\obs-plugins\aegis-obs-shim"
+
+$dllDestDir = Join-Path $ObsRoot "obs-plugins\64bit"
+$assetDestDir = Join-Path $ObsRoot "data\obs-plugins\aegis-obs-shim"
+$dllDest = Join-Path $dllDestDir "aegis-obs-shim.dll"
+
+if (-not (Test-Path -LiteralPath $ObsRoot)) {
+    throw "OBS root not found: $ObsRoot"
+}
+if (-not (Test-Path -LiteralPath $dllDestDir)) {
+    throw "OBS plugin dll dir not found: $dllDestDir"
+}
+if (-not (Test-Path -LiteralPath $assetSourceDir)) {
+    throw "Built asset staging dir not found: $assetSourceDir"
+}
+
+if (-not $BridgeRoot) {
+    $autoBridgeCandidates = @(
+        (Join-Path $workspaceRoot "aegis-dock-bridge.js"),
+        (Join-Path $workspaceRoot "aegis-dock-bridge-host.js"),
+        (Join-Path $workspaceRoot "aegis-dock-browser-host-bootstrap.js")
+    )
+    if (($autoBridgeCandidates | Where-Object { Test-Path -LiteralPath $_ }).Count -eq 3) {
+        $BridgeRoot = $workspaceRoot
+        $bridgeRootAutoSelected = $true
+    }
+}
+
+if ($BridgeRoot) {
+    if (-not (Test-Path -LiteralPath $BridgeRoot)) {
+        throw "BridgeRoot path not found: $BridgeRoot"
+    }
+}
+
+if ($StopObs) {
+    Write-Host "Stopping OBS processes before deploy..."
+    Stop-ObsProcess -Force:$ForceStopObs -TimeoutSeconds $ObsGracefulTimeoutSeconds
+    if (Get-Process obs64 -ErrorAction SilentlyContinue) {
+        throw "OBS is still running after graceful stop. Re-run with -ForceStopObs if needed."
+    }
+    Start-Sleep -Milliseconds 300
+}
+
+New-Item -ItemType Directory -Path $assetDestDir -Force | Out-Null
+
+Copy-IfExists -Source $dllSource -Destination $dllDest
+Copy-IfExists -Source (Resolve-BridgeSourceFile -BridgeRootDir $BridgeRoot -BuildAssetDir $assetSourceDir -FileName "aegis-dock-bridge.js") -Destination (Join-Path $assetDestDir "aegis-dock-bridge.js")
+Copy-IfExists -Source (Resolve-BridgeSourceFile -BridgeRootDir $BridgeRoot -BuildAssetDir $assetSourceDir -FileName "aegis-dock-bridge-host.js") -Destination (Join-Path $assetDestDir "aegis-dock-bridge-host.js")
+Copy-IfExists -Source (Resolve-BridgeSourceFile -BridgeRootDir $BridgeRoot -BuildAssetDir $assetSourceDir -FileName "aegis-dock-browser-host-bootstrap.js") -Destination (Join-Path $assetDestDir "aegis-dock-browser-host-bootstrap.js")
+Copy-IfExists -Source (Resolve-DockRuntimeSourceFile -BridgeRootDir $BridgeRoot -BuildAssetDir $assetSourceDir -FileName "aegis-dock-app.js") -Destination (Join-Path $assetDestDir "aegis-dock-app.js")
+Copy-IfExists -Source (Resolve-DockRuntimeSourceFile -BridgeRootDir $BridgeRoot -BuildAssetDir $assetSourceDir -FileName "aegis-dock.html") -Destination (Join-Path $assetDestDir "aegis-dock.html")
+
+# Prevent stale mixed deployments: runtime may choose .global.js if left behind in older builds.
+$staleGlobal = Join-Path $assetDestDir "aegis-dock-bridge.global.js"
+if (Test-Path -LiteralPath $staleGlobal) {
+    cmd /c del /f /q "$staleGlobal" | Out-Null
+}
+
+Write-Host ""
+Write-Host "Deployed Aegis OBS shim -> $ObsRoot"
+Write-Host "  DLL:   $dllDest"
+Write-Host "  Assets: $assetDestDir"
+if ($BridgeRoot) {
+    if ($bridgeRootAutoSelected) {
+        Write-Host "  Bridge source: auto-selected workspace root ($BridgeRoot)"
+    } else {
+        Write-Host "  Bridge source override: $BridgeRoot"
+    }
+} else {
+    Write-Host "  Bridge source: $assetSourceDir"
+}
+Write-Host ""
+Get-ChildItem -LiteralPath $assetDestDir |
+    Where-Object { $_.Name -like "aegis-dock*" } |
+    Sort-Object Name |
+    Select-Object Name, Length, LastWriteTime |
+    Format-Table -AutoSize

@@ -1,3 +1,6 @@
+use crate::aegis::{
+    ControlPlaneClient, RelaySession, RelayStartClientContext, RelayStartRequest, RelayStopRequest,
+};
 use crate::config::Config;
 use crate::exporters::GrafanaExporter;
 use crate::metrics::MetricsHub;
@@ -7,6 +10,7 @@ use rand::{distributions::Alphanumeric, Rng};
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
+use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::watch;
 use tokio::time::Duration;
 
@@ -32,6 +36,15 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
         if command == "autostart-disable" {
             return handle_autostart(false, &config);
         }
+        if command == "aegis-relay-active" {
+            return handle_aegis_relay_active(&config).await;
+        }
+        if command == "aegis-relay-start" {
+            return handle_aegis_relay_start(&config).await;
+        }
+        if command == "aegis-relay-stop" {
+            return handle_aegis_relay_stop(&config).await;
+        }
     }
 
     let vault = Arc::new(Mutex::new(Vault::new(config.vault.path.as_deref())?));
@@ -55,7 +68,16 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let grafana_configured =
         config.grafana.enabled && config.grafana.endpoint.is_some() && grafana_auth_value.is_some();
 
+    let aegis_session_snapshot = Arc::new(Mutex::new(None::<RelaySession>));
+    run_aegis_startup_probe(&config, vault.clone(), aegis_session_snapshot.clone()).await;
+
     let (tx, rx) = watch::channel(TelemetryFrame::default());
+    let ipc_debug_status = crate::ipc::new_debug_status();
+    let ipc_cmd_tx = crate::ipc::spawn_server(
+        rx.clone(),
+        aegis_session_snapshot.clone(),
+        ipc_debug_status.clone(),
+    );
     let obs_host = config.obs.host.clone();
     let obs_port = config.obs.port;
     let latency_target = config.network.latency_target.clone();
@@ -84,12 +106,13 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
         if let Some(endpoint) = config.grafana.endpoint.clone() {
             let export_rx = rx.clone();
             let interval_ms = config.grafana.push_interval_ms;
+            let grafana_auth_header = config.grafana.auth_header.clone();
             tokio::spawn(async move {
                 let mut backoff_ms = 1000u64;
                 loop {
                     let exporter = GrafanaExporter::new(
                         &endpoint,
-                        &config.grafana.auth_header,
+                        &grafana_auth_header,
                         grafana_auth_value.clone(),
                         interval_ms,
                     );
@@ -172,7 +195,18 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     tokio::select! {
-        res = crate::server::start(addr, token, rx, shutdown_rx_server, config.theme.clone(), vault.clone(), grafana_configured) => res,
+        res = crate::server::start(
+            addr,
+            token,
+            rx,
+            shutdown_rx_server,
+            config.theme.clone(),
+            vault.clone(),
+            grafana_configured,
+            aegis_session_snapshot.clone(),
+            ipc_cmd_tx,
+            ipc_debug_status,
+        ) => res,
         _ = tokio::signal::ctrl_c() => {
             eprintln!("shutdown: ctrl-c");
             metrics_task.abort();
@@ -183,6 +217,45 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
             eprintln!("shutdown: tray");
             metrics_task.abort();
             Ok(())
+        }
+    }
+}
+
+async fn run_aegis_startup_probe(
+    config: &Config,
+    vault: Arc<Mutex<Vault>>,
+    snapshot: Arc<Mutex<Option<RelaySession>>>,
+) {
+    if !config.aegis.enabled {
+        return;
+    }
+
+    let client = {
+        let guard = vault.lock().unwrap();
+        match build_aegis_client(config, &guard) {
+            Ok(client) => client,
+            Err(err) => {
+                tracing::warn!(error = %err, "aegis startup probe disabled: invalid config or credentials");
+                return;
+            }
+        }
+    };
+
+    match client.relay_active().await {
+        Ok(Some(session)) => {
+            tracing::info!(
+                session_id = %session.session_id,
+                status = %session.status,
+                region = ?session.region,
+                "aegis startup probe: active/provisioning session found"
+            );
+            *snapshot.lock().unwrap() = Some(session);
+        }
+        Ok(None) => {
+            tracing::info!("aegis startup probe: no active relay session");
+        }
+        Err(err) => {
+            tracing::warn!(error = %err, "aegis startup probe failed");
         }
     }
 }
@@ -235,10 +308,93 @@ fn handle_autostart(enable: bool, config: &Config) -> Result<(), Box<dyn std::er
     Ok(())
 }
 
+async fn handle_aegis_relay_active(config: &Config) -> Result<(), Box<dyn std::error::Error>> {
+    let vault = Vault::new(config.vault.path.as_deref())?;
+    let client = build_aegis_client(config, &vault)?;
+    let session = client.relay_active().await?;
+    println!("{}", serde_json::to_string_pretty(&session)?);
+    Ok(())
+}
+
+async fn handle_aegis_relay_start(config: &Config) -> Result<(), Box<dyn std::error::Error>> {
+    let mut args = std::env::args().skip(2);
+    let region_preference = args.next();
+
+    let vault = Vault::new(config.vault.path.as_deref())?;
+    let client = build_aegis_client(config, &vault)?;
+
+    let request = RelayStartRequest {
+        region_preference,
+        client_context: Some(RelayStartClientContext {
+            obs_connected: None,
+            mode: Some("studio".to_string()),
+            requested_by: Some("cli".to_string()),
+        }),
+    };
+    let idempotency_key = generate_idempotency_key();
+    let session = client.relay_start(&idempotency_key, &request).await?;
+
+    tracing::info!(idempotency_key = %idempotency_key, session_id = %session.session_id, status = %session.status, "aegis relay start completed");
+    println!("{}", serde_json::to_string_pretty(&session)?);
+    Ok(())
+}
+
+async fn handle_aegis_relay_stop(config: &Config) -> Result<(), Box<dyn std::error::Error>> {
+    let mut args = std::env::args().skip(2);
+    let session_id = args
+        .next()
+        .ok_or("missing session_id (usage: aegis-relay-stop <session_id> [reason])")?;
+    let reason = args.next().unwrap_or_else(|| "user_requested".to_string());
+
+    let vault = Vault::new(config.vault.path.as_deref())?;
+    let client = build_aegis_client(config, &vault)?;
+    let response = client
+        .relay_stop(&RelayStopRequest { session_id, reason })
+        .await?;
+
+    println!("{}", serde_json::to_string_pretty(&response)?);
+    Ok(())
+}
+
+fn build_aegis_client(
+    config: &Config,
+    vault: &Vault,
+) -> Result<ControlPlaneClient, Box<dyn std::error::Error>> {
+    let base_url = config
+        .aegis
+        .base_url
+        .as_deref()
+        .ok_or("missing aegis.base_url in config")?
+        .trim();
+    let jwt_key = config
+        .aegis
+        .access_jwt_key
+        .as_deref()
+        .ok_or("missing aegis.access_jwt_key in config")?
+        .trim();
+    if base_url.is_empty() {
+        return Err("missing aegis.base_url in config".into());
+    }
+    if jwt_key.is_empty() {
+        return Err("missing aegis.access_jwt_key in config".into());
+    }
+    let access_jwt = vault.retrieve(jwt_key)?;
+
+    Ok(ControlPlaneClient::new(base_url, access_jwt.trim())?)
+}
+
 fn generate_token(len: usize) -> String {
     rand::thread_rng()
         .sample_iter(&Alphanumeric)
         .take(len)
         .map(char::from)
         .collect()
+}
+
+fn generate_idempotency_key() -> String {
+    let ts = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    format!("telemy-{}-{}", ts, generate_token(12))
 }

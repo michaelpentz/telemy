@@ -10,6 +10,11 @@ cargo-target/
 *.exp
 *.lib
 *.obj
+third_party/obs-sdk-importlibs/*.def
+third_party/obs-studio/
+
+# Local CMake build directories (keeps obs-plugin-shim source trackable without generated projects)
+obs-plugin-shim/build*/
 
 # Dependencies - don't ignore Cargo.lock in root
 # (it's needed for reproducible builds)
@@ -39,6 +44,7 @@ obs-telemetry-bridge/installer/Output/
 
 # Cache
 .cache/
+aegis-control-plane/.gocache/
 
 # OS
 *.tmp
@@ -53,6 +59,13 @@ obs-telemetry-bridge/installer/Output/
 *.backup
 *.old
 *.bak
+
+# Internal coordination docs (live in parent folder, not in repo)
+HANDOFF_STATUS.md
+CURRENT_STATUS.md
+HANDOFF_HISTORY.md
+AGENT_RELAY.md
+GEMINI_RELAY.md
 
 # Windows specific
 Desktop.ini

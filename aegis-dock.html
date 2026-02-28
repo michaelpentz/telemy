@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' data: blob:;" />
+  <title>Aegis Dock</title>
+  <style>
+    :root {
+      --bg: #091018;
+      --bg-elev: #101a25;
+      --bg-panel: #0d141d;
+      --line: #243447;
+      --line-soft: #1a2633;
+      --text: #dce7f2;
+      --muted: #8ea3b8;
+      --accent: #5fd0ff;
+      --accent-2: #7cffb9;
+      --warn: #ffcc66;
+      --danger: #ff7e7e;
+      --good: #6ff0a8;
+      --shadow: 0 10px 32px rgba(0, 0, 0, 0.35);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; height: 100%; }
+    body {
+      color: var(--text);
+      background:
+        radial-gradient(1200px 500px at -10% -10%, rgba(95, 208, 255, 0.16), transparent 60%),
+        radial-gradient(900px 380px at 110% 0%, rgba(124, 255, 185, 0.08), transparent 60%),
+        linear-gradient(180deg, #071018 0%, #080d14 100%);
+      font-family: "Bahnschrift", "Segoe UI Variable Text", "Segoe UI", sans-serif;
+      overflow: hidden;
+    }
+
+    #app {
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+      gap: 10px;
+      height: 100%;
+      padding: 10px;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(16, 26, 37, 0.95), rgba(11, 18, 26, 0.95));
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+      min-width: 0;
+    }
+
+    .header {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      padding: 12px;
+      align-items: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .header::after {
+      content: "";
+      position: absolute;
+      inset: auto -30px -30px auto;
+      width: 120px;
+      height: 120px;
+      border-radius: 999px;
+      background: radial-gradient(circle, rgba(95, 208, 255, 0.22), transparent 68%);
+      pointer-events: none;
+    }
+
+    .title {
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      font-size: 13px;
+      color: #c7e6f8;
+    }
+
+    .subtitle {
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .header-right {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid var(--line);
+      background: rgba(9, 14, 20, 0.72);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 4px 9px;
+      font-size: 11px;
+      white-space: nowrap;
+    }
+
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: var(--muted);
+      box-shadow: 0 0 10px transparent;
+    }
+    .dot.good { background: var(--good); box-shadow: 0 0 12px rgba(111, 240, 168, 0.55); }
+    .dot.warn { background: var(--warn); box-shadow: 0 0 12px rgba(255, 204, 102, 0.4); }
+    .dot.bad { background: var(--danger); box-shadow: 0 0 12px rgba(255, 126, 126, 0.45); }
+
+    .quick {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      padding: 0 12px 12px;
+    }
+
+    .metric {
+      border: 1px solid var(--line-soft);
+      background: rgba(7, 12, 18, 0.75);
+      border-radius: 10px;
+      padding: 8px;
+      min-width: 0;
+    }
+    .metric .label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .metric .value { margin-top: 4px; font-weight: 700; font-size: 15px; color: #eef7ff; }
+
+    .content {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 10px;
+      min-height: 0;
+    }
+
+    .stack {
+      display: grid;
+      gap: 10px;
+      min-height: 0;
+      grid-template-rows: auto auto 1fr;
+    }
+
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px 0;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+
+    .scene-list {
+      padding: 10px 12px 12px;
+      display: grid;
+      gap: 8px;
+      max-height: 220px;
+      overflow: auto;
+    }
+
+    .scene-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: center;
+      border: 1px solid var(--line-soft);
+      background: rgba(6, 10, 15, 0.8);
+      border-radius: 10px;
+      padding: 8px 10px;
+    }
+    .scene-row.active {
+      border-color: rgba(95, 208, 255, 0.5);
+      box-shadow: inset 0 0 0 1px rgba(95, 208, 255, 0.16);
+      background: linear-gradient(180deg, rgba(12, 22, 31, 0.95), rgba(8, 15, 22, 0.92));
+    }
+    .scene-row.pending {
+      border-color: rgba(255, 204, 102, 0.42);
+    }
+    .scene-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: #e8f3fb;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .scene-meta {
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .btn {
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, #122130, #0d1823);
+      color: #d9ebfb;
+      border-radius: 8px;
+      padding: 6px 9px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .btn:hover { border-color: rgba(95, 208, 255, 0.5); }
+    .btn:disabled { opacity: 0.45; cursor: default; }
+    .btn.primary {
+      border-color: rgba(95, 208, 255, 0.55);
+      background: linear-gradient(180deg, rgba(22, 70, 94, 0.8), rgba(12, 39, 53, 0.9));
+    }
+    .btn.subtle {
+      background: rgba(9, 14, 20, 0.8);
+    }
+
+    .modes, .settings {
+      padding: 10px 12px 12px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .toggle {
+      border: 1px solid var(--line);
+      background: rgba(7, 12, 18, 0.8);
+      border-radius: 999px;
+      padding: 6px 10px;
+      color: var(--text);
+      font-size: 11px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .toggle[aria-pressed="true"] {
+      border-color: rgba(124, 255, 185, 0.4);
+      background: rgba(16, 46, 33, 0.55);
+      color: #d9fff0;
+    }
+    .toggle[data-mode="active"] {
+      border-color: rgba(95, 208, 255, 0.55);
+      background: rgba(10, 40, 52, 0.6);
+      color: #d9f6ff;
+    }
+
+    .grid2 {
+      padding: 10px 12px 12px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .kv {
+      border: 1px solid var(--line-soft);
+      border-radius: 10px;
+      background: rgba(6, 10, 15, 0.78);
+      padding: 8px;
+    }
+    .kv .k {
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-size: 10px;
+    }
+    .kv .v {
+      margin-top: 4px;
+      font-weight: 700;
+      font-size: 13px;
+      color: #eef7ff;
+      word-break: break-word;
+    }
+
+    .events {
+      display: grid;
+      grid-template-rows: auto 1fr;
+      min-height: 0;
+    }
+    .event-log {
+      margin: 10px 12px 12px;
+      border: 1px solid var(--line-soft);
+      border-radius: 10px;
+      background: rgba(6, 10, 15, 0.86);
+      overflow: auto;
+      min-height: 140px;
+      font-family: Consolas, "Cascadia Mono", monospace;
+      font-size: 11px;
+      line-height: 1.35;
+    }
+    .event {
+      display: grid;
+      grid-template-columns: auto auto 1fr;
+      gap: 8px;
+      padding: 7px 9px;
+      border-bottom: 1px solid rgba(36, 52, 71, 0.45);
+      align-items: start;
+    }
+    .event:last-child { border-bottom: 0; }
+    .event .t { color: var(--muted); white-space: nowrap; }
+    .event .src { color: #9fc2da; text-transform: uppercase; }
+    .event .msg { color: #dce7f2; word-break: break-word; }
+    .event.success .msg { color: #b8ffd6; }
+    .event.warning .msg { color: #ffe29a; }
+    .event.error .msg { color: #ffb3b3; }
+
+    .empty {
+      color: var(--muted);
+      padding: 12px;
+      font-size: 12px;
+      text-align: center;
+    }
+
+    @media (max-width: 900px) {
+      .quick { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .content { grid-template-columns: 1fr; }
+      .stack { grid-template-rows: auto auto auto; }
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <!-- AEGIS_DOCK_HOST_SCRIPTS -->
+  <script src="aegis-dock-app.js"></script>
+</body>
+</html>
+

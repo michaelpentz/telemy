@@ -1,163 +1,54 @@
-# Telemy - OBS Stream Monitor
+# Telemy v0.0.3 Workspace
 
-Telemy is a real-time monitoring solution for multi-encode OBS streaming setups. It bridges OBS Studio with Grafana Cloud for remote telemetry while providing a live health dashboard directly inside OBS.
+This repository contains the local OBS telemetry app plus the new Aegis cloud control-plane work for `v0.0.3`.
 
 ## Repository Layout
 
-- `obs-telemetry-bridge/`: Rust telemetry engine and dashboard server
-- `README.md`: consolidated project, usage, development, and fix notes
+- `obs-telemetry-bridge/`: Rust app (OBS metrics, dashboard, exporter, tray, local runtime).
+- `aegis-control-plane/`: Go backend (relay lifecycle APIs, DB store, AWS/fake provisioners, jobs).
+- `docs/`: Versioned contracts/specs for API, DB schema, state machine, and IPC.
+- `AGENTS.md`: contributor workflow and coding conventions.
 
-## What It Does
+## Start Here
 
-- Monitors OBS outputs (streams, recordings) with per-output metrics
-- Displays a real-time dashboard as an OBS Browser Source
-- Exports telemetry to Grafana Cloud via OpenTelemetry OTLP/HTTP
-- Includes a bundled Grafana dashboard with import support
-- Stores secrets using Windows DPAPI encryption
-- Supports Windows system tray and autostart
+- Documentation index: `docs/README.md`
+- Current implementation status (quick redirect): `HANDOFF_STATUS.md`
+- Concise current status: `docs/CURRENT_STATUS.md`
+- Handoff index + latest addenda pointers: `docs/archive/HANDOFF_STATUS.md`
+- Full historical handoff log: `docs/archive/HANDOFF_HISTORY.md`
+- Archived planning/history (reference only): `docs/archive/OVERHAUL-v0.0.3.md`, `docs/archive/ARCHITECTURE-v0.0.3-FIRST-PASS.md`
 
-## Architecture
+## Quick Commands
 
-OBS Studio -> WebSocket v5 -> Telemy Engine (metrics collection) ->
-- Axum server (dashboard + settings + WS)
-- OTLP exporter (Grafana Cloud)
-- Tray integration (Windows)
-
-## Components
-
-1. MetricsHub: collects OBS, system, GPU, and network metrics on an interval.
-2. HTTP/WebSocket server: serves dashboard, settings, and telemetry stream.
-3. Grafana exporter: pushes histogram metrics via OTLP/HTTP.
-4. System tray: Open Dashboard and Quit actions.
-
-## Monitored Metrics
-
-- OBS per-output metrics: bitrate, FPS, drop percent, encoding lag
-- OBS global metrics: streaming/recording status, studio mode, active FPS
-- OBS quality metrics: render missed frames, encoder skipped frames, disk space
-- System metrics: CPU, memory, GPU utilization/temperature (NVIDIA NVML)
-- Network metrics: upload/download throughput and latency probe
-
-## Quick Start
-
-From the repo root:
-
-```bash
+Rust app:
+```powershell
 cd obs-telemetry-bridge
-cargo build --release
-./target/release/obs-telemetry-bridge config-init
-./target/release/obs-telemetry-bridge vault-set obs_password "YOUR_OBS_PASSWORD"
-./target/release/obs-telemetry-bridge
-```
-
-Add the printed `http://127.0.0.1:7070/obs?token=...` URL to OBS as a Browser Source.
-
-## CLI Commands
-
-- `obs-telemetry-bridge config-init`
-- `obs-telemetry-bridge vault-set <key> <value>`
-- `obs-telemetry-bridge vault-get <key>`
-- `obs-telemetry-bridge vault-list`
-- `obs-telemetry-bridge autostart-enable`
-- `obs-telemetry-bridge autostart-disable`
-
-## Settings and Security
-
-- Settings page: `http://127.0.0.1:7070/settings?token=...`
-- Vault location: `%APPDATA%/Telemy/vault.json`
-- Vault keys:
-  - `server_token` (dashboard access)
-  - `obs_password` (OBS WebSocket password)
-  - `grafana_auth` (Grafana auth material)
-
-All secrets are encrypted with Windows DPAPI.
-
-## Grafana Cloud Integration
-
-- Configure endpoint, instance ID, and token via Settings page.
-- Download bundled dashboard from `GET /grafana-dashboard?token=...`
-- Auto-import dashboard via `POST /grafana-dashboard/import?token=...`
-
-### Exported Metrics
-
-- `telemy.health`
-- `telemy.system.cpu_percent`
-- `telemy.system.mem_percent`
-- `telemy.system.gpu_percent`
-- `telemy.system.gpu_temp_c`
-- `telemy.network.upload_mbps`
-- `telemy.network.download_mbps`
-- `telemy.network.latency_ms`
-- `telemy.output.bitrate_kbps`
-- `telemy.output.drop_pct`
-- `telemy.output.fps`
-- `telemy.output.encoding_lag_ms`
-- `telemy.obs.render_missed_frames`
-- `telemy.obs.render_total_frames`
-- `telemy.obs.output_skipped_frames`
-- `telemy.obs.output_total_frames`
-- `telemy.obs.active_fps`
-- `telemy.obs.disk_space_mb`
-
-## Development Guide
-
-### Module Structure
-
-```text
-obs-telemetry-bridge/src/
-|- main.rs
-|- app/mod.rs
-|- config/mod.rs
-|- security/mod.rs
-|- model/mod.rs
-|- metrics/mod.rs
-|- server/mod.rs
-|- exporters/mod.rs
-`- tray/mod.rs
-```
-
-### Key Dependencies
-
-- Runtime/server: `tokio`, `axum`, `tower`
-- OBS integration: `obws`
-- Metrics/system: `opentelemetry`, `opentelemetry-otlp`, `sysinfo`, `nvml-wrapper`
-- Config/serialization: `serde`, `serde_json`, `toml`
-- Windows integration: `windows`, `tray-item`, `winres`
-
-### Build and Validation
-
-```bash
-cd obs-telemetry-bridge
+cargo build
 cargo test
-cargo clippy -- -D warnings
-cargo build --release
 ```
 
-## OBS 207 Compatibility Fix
+Go backend:
+```powershell
+cd aegis-control-plane
+go test ./...
+go run ./cmd/api
+```
 
-Date: 2026-02-19
+## Runtime Notes
 
-Issue observed:
-- `DeserializeMessage(Error("invalid value: 207 ..."))`
+- OBS integration is local and Windows-focused.
+- Aegis backend requires PostgreSQL and environment configuration (see `aegis-control-plane/README.md`).
+- Background jobs (idempotency cleanup, usage rollup, outage reconciliation) run in-process with the backend service.
 
-Cause:
-- Older `obws` did not recognize OBS status code `207` (`NotReady`).
+## Security
 
-Resolution:
-- Upgraded `obws` from `0.11.5` to `0.14.0`.
+- Never commit credentials, tokens, or populated vault/config secrets.
+- Use env vars for backend secrets (`AEGIS_DATABASE_URL`, `AEGIS_JWT_SECRET`, `AEGIS_RELAY_SHARED_KEY`).
 
-Validation completed:
-- `cargo test` passed
-- `cargo clippy -- -D warnings` passed
-- `cargo build --release` passed
+## Current Handoff Note
 
-## Requirements
+- Backend/cloud side is ahead of client/plugin maturity in this workspace snapshot.
+- Latest backend execution and ops handoff details (including EC2 timeout-fix deployment and access hardening) are in `docs/archive/HANDOFF_HISTORY.md`.
+- Next major project focus remains the v0.0.3 client/plugin/app overhaul before broad beta testing.
+- Keep transient operator prompts out of the repo root; capture durable context in `docs/archive/HANDOFF_HISTORY.md` (and refresh `docs/CURRENT_STATUS.md` as needed).
 
-- Windows 10/11 (64-bit)
-- OBS Studio 28+ with WebSocket v5 enabled
-- Grafana Cloud account (optional)
-- NVIDIA GPU (optional, for GPU metrics)
-
-## License
-
-TBD

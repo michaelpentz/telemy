@@ -5,7 +5,9 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
+#[cfg(windows)]
 use windows::Win32::Foundation::{LocalFree, HLOCAL};
+#[cfg(windows)]
 use windows::Win32::Security::Cryptography::{
     CryptProtectData, CryptUnprotectData, CRYPTPROTECT_UI_FORBIDDEN, CRYPT_INTEGER_BLOB,
 };
@@ -74,6 +76,7 @@ fn default_vault_path() -> PathBuf {
     Path::new(&base).join("Telemy").join("vault.json")
 }
 
+#[cfg(windows)]
 fn protect(data: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     unsafe {
         let in_blob = CRYPT_INTEGER_BLOB {
@@ -98,6 +101,7 @@ fn protect(data: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     }
 }
 
+#[cfg(windows)]
 fn unprotect(data: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     unsafe {
         let in_blob = CRYPT_INTEGER_BLOB {
@@ -120,4 +124,15 @@ fn unprotect(data: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
         let _ = LocalFree(HLOCAL(out_blob.pbData as *mut _));
         Ok(out)
     }
+}
+
+#[cfg(not(windows))]
+fn protect(data: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    // Linux fallback for server deployments; values are encoded, not encrypted.
+    Ok(data.to_vec())
+}
+
+#[cfg(not(windows))]
+fn unprotect(data: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    Ok(data.to_vec())
 }

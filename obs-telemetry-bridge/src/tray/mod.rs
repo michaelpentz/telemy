@@ -1,9 +1,15 @@
+#[cfg(windows)]
 use std::io::Write;
+#[cfg(windows)]
 use std::process::{Command, Stdio};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
+#[cfg(windows)]
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
+#[cfg(windows)]
 use tray_item::{IconSource, TrayItem};
 
+#[cfg(windows)]
 pub fn start_tray(
     dashboard_url: String,
     settings_url: String,
@@ -50,4 +56,14 @@ pub fn start_tray(
     }
 
     Ok(())
+}
+
+#[cfg(not(windows))]
+pub fn start_tray(
+    _dashboard_url: String,
+    _settings_url: String,
+    _shutdown_flag: Arc<AtomicBool>,
+    _shutdown_tx: tokio::sync::watch::Sender<bool>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    Err("tray is only supported on Windows".into())
 }
